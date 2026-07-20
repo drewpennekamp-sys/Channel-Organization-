@@ -5,10 +5,14 @@ import type {
   DailyPlanDTO,
   DashboardEntryDTO,
   InsightDTO,
+  InsightEntryDTO,
   ManualInsightPayload,
+  OwnerView,
+  PortfolioSummaryDTO,
   PostedVideoDTO,
   SettingsDTO,
   SettingsResponseDTO,
+  VideoLogEntryDTO,
   VideoPayload,
 } from './types';
 import { downloadBlob } from './download';
@@ -42,9 +46,23 @@ function toPayload(values: ChannelFormValues) {
 }
 
 export async function fetchChannels(): Promise<ChannelDTO[]> {
-  const res = await fetch('/api/channels');
+  const res = await fetch('/api/channels', { cache: 'no-store' });
   const data = await handle<{ channels: ChannelDTO[] }>(res);
   return data.channels;
+}
+
+export async function fetchVideoLog(): Promise<VideoLogEntryDTO[]> {
+  const res = await fetch('/api/video-log', { cache: 'no-store' });
+  const data = await handle<{ entries: VideoLogEntryDTO[] }>(res);
+  return data.entries;
+}
+
+export async function fetchInsights(): Promise<{
+  entries: InsightEntryDTO[];
+  portfolioByView: Record<OwnerView, PortfolioSummaryDTO>;
+}> {
+  const res = await fetch('/api/insights', { cache: 'no-store' });
+  return handle(res);
 }
 
 export async function fetchChannelDetail(
@@ -80,7 +98,7 @@ export async function deleteChannel(id: string): Promise<void> {
 }
 
 export async function fetchDashboard(): Promise<DashboardEntryDTO[]> {
-  const res = await fetch('/api/dashboard');
+  const res = await fetch('/api/dashboard', { cache: 'no-store' });
   const data = await handle<{ entries: DashboardEntryDTO[] }>(res);
   return data.entries;
 }

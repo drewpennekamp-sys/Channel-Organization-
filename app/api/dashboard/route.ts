@@ -21,5 +21,5 @@ export async function GET() {
     plan: latestPlanByChannel.get(channel.id) ?? null,
   }));
 
-  return NextResponse.json({ entries });
+  return NextResponse.json({ entries }, { headers: { 'Cache-Control': 'no-store' } });
 }

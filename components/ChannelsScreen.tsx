@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Plus } from 'lucide-react';
 import type { ChannelDTO } from '@/lib/types';
-import { deleteChannel } from '@/lib/client-api';
+import { deleteChannel, fetchChannels } from '@/lib/client-api';
 import { useOwnerFilter, matchesOwnerView } from './OwnerFilterProvider';
 import { OwnerViewEmptyState } from './OwnerViewEmptyState';
 import { ChannelGrid } from './ChannelGrid';
@@ -28,7 +28,29 @@ export function ChannelsScreen({
 }) {
   const [channels, setChannels] = useState<ChannelDTO[]>(initialChannels);
   const [panel, setPanel] = useState<PanelState>(null);
+  const [ready, setReady] = useState(false);
   const { view } = useOwnerFilter();
+
+  // The server-rendered initial list can be stale by the time it reaches the
+  // browser (edge caching, a redeploy that landed mid-session, etc.), so the
+  // client always re-fetches once on mount and trusts that over whatever
+  // came down with the page.
+  useEffect(() => {
+    let cancelled = false;
+    fetchChannels()
+      .then((fresh) => {
+        if (!cancelled) setChannels(fresh);
+      })
+      .catch(() => {
+        // Keep the server-rendered data if the refetch itself fails.
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const visibleChannels = useMemo(
     () => channels.filter((c) => matchesOwnerView(c.owner, view)),
@@ -76,7 +98,7 @@ export function ChannelsScreen({
       </div>
 
       <div className="mt-8">
-        {channels.length === 0 ? (
+        {!ready && channels.length === 0 ? null : channels.length === 0 ? (
           <EmptyState onAdd={() => setPanel({ mode: 'add' })} />
         ) : visibleChannels.length === 0 ? (
           <OwnerViewEmptyState noun="channels" />

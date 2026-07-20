@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import type { InsightDTO, InsightEntryDTO, OwnerView, PortfolioSummaryDTO } from '@/lib/types';
-import { addManualInsight, analyzeChannel } from '@/lib/client-api';
+import { addManualInsight, analyzeChannel, fetchInsights } from '@/lib/client-api';
 import { useOwnerFilter, matchesOwnerView } from './OwnerFilterProvider';
 import { OwnerViewEmptyState } from './OwnerViewEmptyState';
 import { MissingKeyBanner } from './MissingKeyBanner';
@@ -32,16 +32,38 @@ export function InsightsScreen({
   anthropicKeyPresent: boolean;
 }) {
   const [entries, setEntries] = useState<InsightEntryDTO[]>(initialEntries);
+  const [portfolios, setPortfolios] = useState(portfolioByView);
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
   const [analyzeErrors, setAnalyzeErrors] = useState<Record<string, string>>({});
   const [notePanel, setNotePanel] = useState<NotePanelState>(null);
+  const [ready, setReady] = useState(false);
   const { view } = useOwnerFilter();
+
+  // See ChannelsScreen for why: always trust a fresh client-side fetch over
+  // whatever the server happened to render into the initial HTML.
+  useEffect(() => {
+    let cancelled = false;
+    fetchInsights()
+      .then((fresh) => {
+        if (!cancelled) {
+          setEntries(fresh.entries);
+          setPortfolios(fresh.portfolioByView);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const visibleEntries = useMemo(
     () => entries.filter((e) => matchesOwnerView(e.channel.owner, view)),
     [entries, view]
   );
-  const portfolio = portfolioByView[view];
+  const portfolio = portfolios[view];
 
   async function handleAnalyze(channelId: string) {
     setAnalyzingIds((prev) => new Set(prev).add(channelId));
@@ -95,7 +117,7 @@ export function InsightsScreen({
         />
       )}
 
-      {entries.length === 0 ? (
+      {!ready && entries.length === 0 ? null : entries.length === 0 ? (
         <div className="mt-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 px-6 py-24 text-center">
           <h2 className="font-heading text-xl font-semibold tracking-tight text-zinc-50">
             No channels to analyze yet

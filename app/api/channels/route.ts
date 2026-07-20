@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const rows = await db.select().from(channels).orderBy(asc(channels.createdAt));
-  return NextResponse.json({ channels: rows });
+  return NextResponse.json({ channels: rows }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function POST(request: Request) {

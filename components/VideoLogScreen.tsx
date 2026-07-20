@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import { Loader2, RefreshCw } from 'lucide-react';
@@ -8,6 +8,7 @@ import type { PostedVideoDTO, SettingsDTO, VideoLogEntryDTO, VideoPayload } from
 import {
   createVideoForChannel,
   deleteVideo,
+  fetchVideoLog,
   syncChannelVideos,
   updateVideo,
 } from '@/lib/client-api';
@@ -34,7 +35,25 @@ export function VideoLogScreen({
   const [entries, setEntries] = useState<VideoLogEntryDTO[]>(initialEntries);
   const [panel, setPanel] = useState<PanelState>(null);
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
+  const [ready, setReady] = useState(false);
   const { view } = useOwnerFilter();
+
+  // See ChannelsScreen for why: always trust a fresh client-side fetch over
+  // whatever the server happened to render into the initial HTML.
+  useEffect(() => {
+    let cancelled = false;
+    fetchVideoLog()
+      .then((fresh) => {
+        if (!cancelled) setEntries(fresh);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const visibleEntries = useMemo(
     () => entries.filter((e) => matchesOwnerView(e.channel.owner, view)),
@@ -135,7 +154,7 @@ export function VideoLogScreen({
         />
       )}
 
-      {entries.length === 0 ? (
+      {!ready && entries.length === 0 ? null : entries.length === 0 ? (
         <div className="mt-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 px-6 py-24 text-center">
           <h2 className="font-heading text-xl font-semibold tracking-tight text-zinc-50">
             No channels yet

@@ -82,8 +82,10 @@ Do these in order:
 6. **Deploy** (push to the connected branch, or `vercel --prod`).
 
 7. **Verify the cron job is registered.** In Vercel → Project → Cron Jobs,
-   confirm `/api/cron/sync` is listed with the `*/20 * * * *` schedule from
-   `vercel.json`. It no-ops until `autoSyncEnabled` is turned on in Settings.
+   confirm `/api/cron/sync` is listed with the `0 13 * * *` (once daily)
+   schedule from `vercel.json` — the Hobby plan doesn't allow more frequent
+   cron jobs, which is why this isn't every few minutes. It no-ops until
+   `autoSyncEnabled` is turned on in Settings.
 
 8. **Sign in.** Visit the deployed URL — you'll land on `/login`. Use
    `AUTH_PASSWORD`. Both operators use the same password; the You/Friend/All
@@ -98,12 +100,14 @@ Do these in order:
   redirect — only page navigations redirect to `/login`.
 - **Background sync**: there's no always-on process on serverless, so the
   old client-side polling interval is gone. Vercel Cron hits
-  `/api/cron/sync` every 20 minutes; the route itself checks
-  `settings.autoSyncEnabled` and a stored last-sync timestamp against
-  `settings.autoSyncIntervalMinutes` before doing anything, so the interval
-  setting still means something even though the cron trigger itself is
-  fixed. The client-side poll that keeps the Dashboard/Today screens fresh
-  while you're actively looking at them is unrelated and unchanged.
+  `/api/cron/sync` once a day (the Hobby plan's cron frequency limit — Pro
+  allows more often, in which case you can tighten `vercel.json`'s
+  schedule); the route itself checks `settings.autoSyncEnabled` and a
+  stored last-sync timestamp against `settings.autoSyncIntervalMinutes`
+  before doing anything, so that setting can still space syncs out further
+  than daily if you want. The client-side poll that keeps the
+  Dashboard/Today screens fresh while you're actively looking at them is
+  unrelated and unchanged.
 - **Exports**: "Export today's prompts" and "Export all data" build their
   file content in memory and stream it straight back in the HTTP response —
   nothing is written to disk on the server, which matters on serverless

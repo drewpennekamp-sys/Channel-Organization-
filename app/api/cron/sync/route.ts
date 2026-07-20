@@ -12,11 +12,13 @@ function isAuthorized(request: Request): boolean {
   return request.headers.get('authorization') === `Bearer ${secret}`;
 }
 
-// Vercel Cron fires this on a fixed schedule (see vercel.json — every 20
-// minutes). The settings.autoSyncIntervalMinutes floor can't change how often
-// Vercel *invokes* this route without redeploying, but it can make each
-// invocation a no-op until enough time has actually passed, so the setting
-// still means something even under a fixed cron cadence.
+// Vercel Cron fires this on a fixed schedule (see vercel.json — once daily;
+// the Hobby plan doesn't allow more frequent cron jobs). The
+// settings.autoSyncIntervalMinutes floor can't change how often Vercel
+// *invokes* this route without redeploying, but it can make an invocation a
+// no-op if it hasn't been long enough since the last sync (e.g. set it above
+// 1440 to sync every few days instead of daily), so the setting still means
+// something even under a fixed cron cadence.
 export async function GET(request: Request) {
   if (!isAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

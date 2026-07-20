@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn';
 
 const LINKS = [
   { href: '/dashboard', label: 'Dashboard' },
+  { href: '/video-log', label: 'Video Log' },
   { href: '/channels', label: 'Channels' },
 ];
 

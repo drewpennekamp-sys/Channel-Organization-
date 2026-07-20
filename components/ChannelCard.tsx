@@ -94,7 +94,7 @@ export function ChannelCard({
 
           {confirmOpen && (
             <ConfirmDeletePopover
-              channelName={channel.name}
+              itemName={channel.name}
               onCancel={() => setConfirmOpen(false)}
               onConfirm={handleConfirmDelete}
               isDeleting={isDeleting}

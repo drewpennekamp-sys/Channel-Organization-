@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 
 export const channels = sqliteTable('channels', {
   id: text('id').primaryKey(),
@@ -38,18 +38,22 @@ export const dailyPlans = sqliteTable('daily_plans', {
 
 export const postedVideos = sqliteTable('posted_videos', {
   id: text('id').primaryKey(),
-  dailyPlanId: text('daily_plan_id')
-    .notNull()
-    .references(() => dailyPlans.id, { onDelete: 'cascade' }),
   channelId: text('channel_id')
     .notNull()
     .references(() => channels.id, { onDelete: 'cascade' }),
-  views: integer('views').notNull().default(0),
-  likes: integer('likes').notNull().default(0),
-  comments: integer('comments').notNull().default(0),
+  dailyPlanId: text('daily_plan_id').references(() => dailyPlans.id, { onDelete: 'set null' }),
+  ideaTitle: text('idea_title').notNull(),
+  platformVideoId: text('platform_video_id'),
   postedAt: integer('posted_at', { mode: 'timestamp' })
     .notNull()
     .default(sql`(unixepoch())`),
+  views: integer('views').notNull().default(0),
+  likes: integer('likes').notNull().default(0),
+  comments: integer('comments').notNull().default(0),
+  shares: integer('shares'),
+  avgViewDuration: real('avg_view_duration'),
+  retentionNote: text('retention_note'),
+  lastSyncedAt: integer('last_synced_at', { mode: 'timestamp' }),
 });
 
 export const insights = sqliteTable('insights', {

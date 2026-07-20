@@ -1,23 +1,33 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { cn } from '@/lib/cn';
 
 export function ConfirmDeletePopover({
-  channelName,
+  itemName,
+  message,
   onCancel,
   onConfirm,
   isDeleting,
+  className,
 }: {
-  channelName: string;
+  itemName: string;
+  message?: string;
   onCancel: () => void;
   onConfirm: () => void;
   isDeleting: boolean;
+  className?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      // Responsive layouts (e.g. desktop table + mobile card view) can render
+      // this component twice for the same row, one of them CSS-hidden. Skip
+      // the hidden instance entirely so it doesn't treat a click on its
+      // visible twin as "outside" and close the shared open state.
+      if (!ref.current || ref.current.offsetParent === null) return;
+      if (!ref.current.contains(e.target as Node)) {
         onCancel();
       }
     }
@@ -36,13 +46,16 @@ export function ConfirmDeletePopover({
     <div
       ref={ref}
       role="dialog"
-      aria-label={`Confirm delete ${channelName}`}
+      aria-label={`Confirm delete ${itemName}`}
       onClick={(e) => e.stopPropagation()}
-      className="animate-pop-in absolute right-0 top-full z-30 mt-2 w-64 origin-top-right rounded-lg border border-zinc-700 bg-zinc-800 p-3 shadow-xl shadow-black/40"
+      className={cn(
+        'animate-pop-in absolute right-0 top-full z-30 mt-2 w-64 origin-top-right rounded-lg border border-zinc-700 bg-zinc-800 p-3 shadow-xl shadow-black/40',
+        className
+      )}
     >
       <p className="text-sm text-zinc-200">
-        Delete <span className="font-medium">{channelName}</span>? This also removes its saved
-        ideas and history.
+        Delete <span className="font-medium">{itemName}</span>?{' '}
+        {message ?? 'This also removes its saved ideas and history.'}
       </p>
       <div className="mt-3 flex justify-end gap-2">
         <button

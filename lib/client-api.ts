@@ -4,6 +4,8 @@ import type {
   ChannelFormValues,
   DailyPlanDTO,
   DashboardEntryDTO,
+  PostedVideoDTO,
+  VideoPayload,
 } from './types';
 
 export class ApiError extends Error {
@@ -95,4 +97,41 @@ export async function markChannelPosted(
   });
   const data = await handle<{ plan: DailyPlanDTO }>(res);
   return data.plan;
+}
+
+export async function createVideoForChannel(
+  channelId: string,
+  payload: VideoPayload
+): Promise<PostedVideoDTO> {
+  const res = await fetch(`/api/channels/${channelId}/videos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await handle<{ video: PostedVideoDTO }>(res);
+  return data.video;
+}
+
+export async function updateVideo(
+  videoId: string,
+  payload: Partial<VideoPayload>
+): Promise<PostedVideoDTO> {
+  const res = await fetch(`/api/videos/${videoId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await handle<{ video: PostedVideoDTO }>(res);
+  return data.video;
+}
+
+export async function deleteVideo(videoId: string): Promise<void> {
+  const res = await fetch(`/api/videos/${videoId}`, { method: 'DELETE' });
+  await handle(res);
+}
+
+export async function syncChannelVideos(channelId: string): Promise<PostedVideoDTO[]> {
+  const res = await fetch(`/api/channels/${channelId}/sync-videos`, { method: 'POST' });
+  const data = await handle<{ videos: PostedVideoDTO[] }>(res);
+  return data.videos;
 }

@@ -54,12 +54,18 @@ function createConnection() {
 
     CREATE TABLE IF NOT EXISTS posted_videos (
       id TEXT PRIMARY KEY,
-      daily_plan_id TEXT NOT NULL REFERENCES daily_plans(id) ON DELETE CASCADE,
       channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      daily_plan_id TEXT REFERENCES daily_plans(id) ON DELETE SET NULL,
+      idea_title TEXT NOT NULL DEFAULT '',
+      platform_video_id TEXT,
+      posted_at INTEGER NOT NULL DEFAULT (unixepoch()),
       views INTEGER NOT NULL DEFAULT 0,
       likes INTEGER NOT NULL DEFAULT 0,
       comments INTEGER NOT NULL DEFAULT 0,
-      posted_at INTEGER NOT NULL DEFAULT (unixepoch())
+      shares INTEGER,
+      avg_view_duration REAL,
+      retention_note TEXT,
+      last_synced_at INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS settings (
@@ -78,6 +84,20 @@ function createConnection() {
     posted_at: 'ALTER TABLE daily_plans ADD COLUMN posted_at INTEGER',
   })) {
     if (!dailyPlanColumns.has(column)) sqlite.exec(ddl);
+  }
+
+  const postedVideoColumns = new Set(
+    (sqlite.pragma('table_info(posted_videos)') as Array<{ name: string }>).map((c) => c.name)
+  );
+  for (const [column, ddl] of Object.entries({
+    idea_title: "ALTER TABLE posted_videos ADD COLUMN idea_title TEXT NOT NULL DEFAULT ''",
+    platform_video_id: 'ALTER TABLE posted_videos ADD COLUMN platform_video_id TEXT',
+    shares: 'ALTER TABLE posted_videos ADD COLUMN shares INTEGER',
+    avg_view_duration: 'ALTER TABLE posted_videos ADD COLUMN avg_view_duration REAL',
+    retention_note: 'ALTER TABLE posted_videos ADD COLUMN retention_note TEXT',
+    last_synced_at: 'ALTER TABLE posted_videos ADD COLUMN last_synced_at INTEGER',
+  })) {
+    if (!postedVideoColumns.has(column)) sqlite.exec(ddl);
   }
 
   const defaultToolStmt = sqlite.prepare(

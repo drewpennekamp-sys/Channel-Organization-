@@ -29,12 +29,45 @@ export interface DailyPlanDTO {
 
 export interface PostedVideoDTO {
   id: string;
-  dailyPlanId: string;
   channelId: string;
+  dailyPlanId: string | null;
+  ideaTitle: string;
+  platformVideoId: string | null;
+  postedAt: string;
   views: number;
   likes: number;
   comments: number;
+  shares: number | null;
+  avgViewDuration: number | null;
+  retentionNote: string | null;
+  lastSyncedAt: string | null;
+}
+
+export interface VideoFormValues {
+  ideaTitle: string;
   postedAt: string;
+  views: string;
+  likes: string;
+  comments: string;
+  shares: string;
+  avgViewDuration: string;
+  retentionNote: string;
+}
+
+export interface VideoPayload {
+  ideaTitle: string;
+  postedAt: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number | null;
+  avgViewDuration: number | null;
+  retentionNote: string | null;
+}
+
+export interface VideoLogEntryDTO {
+  channel: ChannelDTO;
+  videos: PostedVideoDTO[];
 }
 
 export interface InsightDTO {

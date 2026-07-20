@@ -48,6 +48,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     id: postedVideoId,
     dailyPlanId: currentPlan.id,
     channelId: channel.id,
+    ideaTitle: currentPlan.ideaTitle,
     views,
     likes,
     comments,

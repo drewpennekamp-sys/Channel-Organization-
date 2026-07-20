@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import { Loader2, RefreshCw } from 'lucide-react';
@@ -98,16 +98,6 @@ export function VideoLogScreen({
       handleSync(entry.channel.id);
     }
   }
-
-  const handleSyncAllRef = useRef(handleSyncAll);
-  handleSyncAllRef.current = handleSyncAll;
-
-  useEffect(() => {
-    if (!settings.autoSyncEnabled) return;
-    const ms = settings.autoSyncIntervalMinutes * 60 * 1000;
-    const id = setInterval(() => handleSyncAllRef.current(), ms);
-    return () => clearInterval(id);
-  }, [settings.autoSyncEnabled, settings.autoSyncIntervalMinutes]);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10 sm:px-8 lg:px-10">

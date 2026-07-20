@@ -7,6 +7,8 @@ import { getSettings } from '@/lib/settings';
 import type { ExportDataDTO } from '@/lib/exportImport';
 import type { ChannelDTO, DailyPlanDTO, PostedVideoDTO } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 function toChannelDTO(row: typeof channels.$inferSelect): ChannelDTO {
   return {
     id: row.id,

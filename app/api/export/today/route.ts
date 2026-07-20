@@ -5,6 +5,8 @@ import { channels, dailyPlans } from '@/lib/db/schema';
 import { buildTodayMarkdown, type TodayPromptEntry } from '@/lib/exportImport';
 import type { ChannelDTO, DailyPlanDTO } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 function toChannelDTO(row: typeof channels.$inferSelect): ChannelDTO {
   return {
     id: row.id,

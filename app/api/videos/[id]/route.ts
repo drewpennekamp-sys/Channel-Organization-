@@ -4,8 +4,10 @@ import { db } from '@/lib/db/client';
 import { postedVideos } from '@/lib/db/schema';
 import { videoUpdateSchema } from '@/lib/validation';
 
+export const dynamic = 'force-dynamic';
+
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const existing = await db.select().from(postedVideos).where(eq(postedVideos.id, params.id)).get();
+  const [existing] = await db.select().from(postedVideos).where(eq(postedVideos.id, params.id)).limit(1);
   if (!existing) {
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }
@@ -39,13 +41,13 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     await db.update(postedVideos).set(updates).where(eq(postedVideos.id, params.id));
   }
 
-  const video = await db.select().from(postedVideos).where(eq(postedVideos.id, params.id)).get();
+  const [video] = await db.select().from(postedVideos).where(eq(postedVideos.id, params.id)).limit(1);
 
   return NextResponse.json({ video });
 }
 
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
-  const existing = await db.select().from(postedVideos).where(eq(postedVideos.id, params.id)).get();
+  const [existing] = await db.select().from(postedVideos).where(eq(postedVideos.id, params.id)).limit(1);
   if (!existing) {
     return NextResponse.json({ error: 'Video not found' }, { status: 404 });
   }

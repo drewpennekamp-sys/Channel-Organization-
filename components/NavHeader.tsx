@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { LogOut } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useOwnerFilter } from './OwnerFilterProvider';
 import { SegmentedControl } from './SegmentedControl';
@@ -18,7 +20,21 @@ const LINKS = [
 
 export function NavHeader() {
   const pathname = usePathname();
+  const router = useRouter();
   const { view, setView } = useOwnerFilter();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  if (pathname === '/login') return null;
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      router.replace('/login');
+      router.refresh();
+    }
+  }
 
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur">
@@ -43,7 +59,7 @@ export function NavHeader() {
             );
           })}
         </nav>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-3">
           <span className="text-xs font-light text-zinc-500">Viewing</span>
           <SegmentedControl<OwnerView>
             name="Viewing"
@@ -55,6 +71,16 @@ export function NavHeader() {
               { value: 'all', label: 'All' },
             ]}
           />
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            aria-label="Log out"
+            title="Log out"
+            className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50"
+          >
+            <LogOut size={15} />
+          </button>
         </div>
       </div>
     </header>

@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { db } from './db/client';
 import { settings } from './db/schema';
 
@@ -71,4 +72,22 @@ export async function updateSettings(partial: Partial<SettingsDTO>): Promise<Set
       .onConflictDoUpdate({ target: settings.key, set: { value: serializeValue(value) } });
   }
   return getSettings();
+}
+
+// Bookkeeping for the sync cron, not a user-facing preference — kept out of
+// SettingsDTO so it never shows up as an editable field in the Settings form.
+const LAST_AUTO_SYNC_KEY = 'last_auto_sync_at';
+
+export async function getLastAutoSyncAt(): Promise<Date | null> {
+  const [row] = await db.select().from(settings).where(eq(settings.key, LAST_AUTO_SYNC_KEY)).limit(1);
+  if (!row) return null;
+  const date = new Date(row.value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+export async function setLastAutoSyncAt(date: Date): Promise<void> {
+  await db
+    .insert(settings)
+    .values({ key: LAST_AUTO_SYNC_KEY, value: date.toISOString() })
+    .onConflictDoUpdate({ target: settings.key, set: { value: date.toISOString() } });
 }

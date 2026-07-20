@@ -6,8 +6,10 @@ import { channels, dailyPlans, insights, postedVideos } from '@/lib/db/schema';
 import { markPostedSchema } from '@/lib/validation';
 import type { DailyPlanDTO } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const channel = await db.select().from(channels).where(eq(channels.id, params.id)).get();
+  const [channel] = await db.select().from(channels).where(eq(channels.id, params.id)).limit(1);
   if (!channel) {
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
@@ -25,12 +27,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
     );
   }
 
-  const currentPlan = await db
+  const [currentPlan] = await db
     .select()
     .from(dailyPlans)
     .where(and(eq(dailyPlans.channelId, channel.id), ne(dailyPlans.postStatus, 'posted')))
     .orderBy(desc(dailyPlans.createdAt))
-    .get();
+    .limit(1);
 
   if (!currentPlan) {
     return NextResponse.json({ error: 'No active idea to mark as posted' }, { status: 409 });
@@ -56,13 +58,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
     postedAt,
   });
 
-  const plan = await db.select().from(dailyPlans).where(eq(dailyPlans.id, currentPlan.id)).get();
+  const [plan] = await db.select().from(dailyPlans).where(eq(dailyPlans.id, currentPlan.id)).limit(1);
   if (!plan) {
     return NextResponse.json({ error: 'Failed to mark as posted' }, { status: 500 });
   }
 
   const informingInsight = plan.informedByInsightId
-    ? await db.select().from(insights).where(eq(insights.id, plan.informedByInsightId)).get()
+    ? (await db.select().from(insights).where(eq(insights.id, plan.informedByInsightId)).limit(1))[0]
     : undefined;
 
   const dto: DailyPlanDTO = {

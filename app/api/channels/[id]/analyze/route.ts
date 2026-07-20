@@ -6,10 +6,12 @@ import { channels, insights, postedVideos } from '@/lib/db/schema';
 import { generateChannelAnalysis } from '@/lib/anthropic';
 import { toInsightDTO } from '@/lib/insights';
 
+export const dynamic = 'force-dynamic';
+
 const MIN_VIDEOS_TO_ANALYZE = 3;
 
 export async function POST(_request: Request, { params }: { params: { id: string } }) {
-  const channel = await db.select().from(channels).where(eq(channels.id, params.id)).get();
+  const [channel] = await db.select().from(channels).where(eq(channels.id, params.id)).limit(1);
   if (!channel) {
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
@@ -61,7 +63,7 @@ export async function POST(_request: Request, { params }: { params: { id: string
     source: 'claude',
   });
 
-  const insight = await db.select().from(insights).where(eq(insights.id, id)).get();
+  const [insight] = await db.select().from(insights).where(eq(insights.id, id)).limit(1);
   if (!insight) {
     return NextResponse.json({ error: 'Failed to save analysis' }, { status: 500 });
   }

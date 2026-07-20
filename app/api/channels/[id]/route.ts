@@ -4,8 +4,10 @@ import { db } from '@/lib/db/client';
 import { channels, dailyPlans, insights } from '@/lib/db/schema';
 import { channelInputSchema } from '@/lib/validation';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
-  const channel = await db.select().from(channels).where(eq(channels.id, params.id)).get();
+  const [channel] = await db.select().from(channels).where(eq(channels.id, params.id)).limit(1);
   if (!channel) {
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
@@ -17,13 +19,12 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     .orderBy(desc(dailyPlans.createdAt))
     .limit(3);
 
-  const latestInsight = await db
+  const [latestInsight] = await db
     .select()
     .from(insights)
     .where(eq(insights.channelId, params.id))
     .orderBy(desc(insights.createdAt))
-    .limit(1)
-    .get();
+    .limit(1);
 
   return NextResponse.json({
     channel,
@@ -35,7 +36,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const existing = await db.select().from(channels).where(eq(channels.id, params.id)).get();
+  const [existing] = await db.select().from(channels).where(eq(channels.id, params.id)).limit(1);
   if (!existing) {
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
@@ -55,11 +56,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 
   const data = parsed.data;
 
-  const nameClash = await db
+  const [nameClash] = await db
     .select({ id: channels.id })
     .from(channels)
     .where(and(sql`lower(${channels.name}) = lower(${data.name})`, ne(channels.id, params.id)))
-    .get();
+    .limit(1);
 
   if (nameClash) {
     return NextResponse.json(
@@ -81,13 +82,13 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     })
     .where(eq(channels.id, params.id));
 
-  const updated = await db.select().from(channels).where(eq(channels.id, params.id)).get();
+  const [updated] = await db.select().from(channels).where(eq(channels.id, params.id)).limit(1);
 
   return NextResponse.json({ channel: updated });
 }
 
 export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
-  const existing = await db.select().from(channels).where(eq(channels.id, params.id)).get();
+  const [existing] = await db.select().from(channels).where(eq(channels.id, params.id)).limit(1);
   if (!existing) {
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }

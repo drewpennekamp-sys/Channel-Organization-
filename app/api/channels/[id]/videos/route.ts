@@ -5,8 +5,10 @@ import { db } from '@/lib/db/client';
 import { channels, postedVideos } from '@/lib/db/schema';
 import { videoInputSchema } from '@/lib/validation';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const channel = await db.select().from(channels).where(eq(channels.id, params.id)).get();
+  const [channel] = await db.select().from(channels).where(eq(channels.id, params.id)).limit(1);
   if (!channel) {
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
@@ -41,7 +43,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     retentionNote: data.retentionNote || null,
   });
 
-  const video = await db.select().from(postedVideos).where(eq(postedVideos.id, id)).get();
+  const [video] = await db.select().from(postedVideos).where(eq(postedVideos.id, id)).limit(1);
 
   return NextResponse.json({ video }, { status: 201 });
 }

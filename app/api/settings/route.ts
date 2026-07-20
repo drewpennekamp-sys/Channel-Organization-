@@ -4,6 +4,8 @@ import { anthropicKeyStatus, vidiqKeyStatus } from '@/lib/envKeys';
 import { settingsInputSchema } from '@/lib/validation';
 import type { SettingsResponseDTO } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+
 async function buildResponse(): Promise<SettingsResponseDTO> {
   return {
     settings: await getSettings(),

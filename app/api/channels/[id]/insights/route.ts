@@ -6,8 +6,10 @@ import { channels, insights } from '@/lib/db/schema';
 import { manualInsightSchema } from '@/lib/validation';
 import { toInsightDTO } from '@/lib/insights';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const channel = await db.select().from(channels).where(eq(channels.id, params.id)).get();
+  const [channel] = await db.select().from(channels).where(eq(channels.id, params.id)).limit(1);
   if (!channel) {
     return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
   }
@@ -34,7 +36,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     source: 'manual',
   });
 
-  const insight = await db.select().from(insights).where(eq(insights.id, id)).get();
+  const [insight] = await db.select().from(insights).where(eq(insights.id, id)).limit(1);
   if (!insight) {
     return NextResponse.json({ error: 'Failed to save note' }, { status: 500 });
   }

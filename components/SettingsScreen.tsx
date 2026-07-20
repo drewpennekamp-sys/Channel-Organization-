@@ -205,7 +205,8 @@ export function SettingsScreen({
                   Auto-sync from vidIQ
                 </label>
                 <p className="mt-0.5 text-xs font-light text-zinc-500">
-                  Periodically refreshes posted-video stats in the background on the Video Log.
+                  A Vercel Cron job checks every 20 minutes; this floor controls how often it
+                  actually syncs.
                 </p>
               </div>
               <Toggle
@@ -223,7 +224,7 @@ export function SettingsScreen({
                     label="Auto-sync interval"
                     htmlFor="autoSyncIntervalMinutes"
                     error={errorFor('autoSyncIntervalMinutes')}
-                    hint="Minutes between background syncs"
+                    hint="Minutes between syncs — won't run more often than the 20-minute cron floor"
                   >
                     <input
                       id="autoSyncIntervalMinutes"

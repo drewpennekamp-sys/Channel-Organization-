@@ -6,6 +6,8 @@ import { channels } from '@/lib/db/schema';
 import { channelInputSchema } from '@/lib/validation';
 import { nextAccentColor } from '@/lib/palette';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   const rows = await db.select().from(channels).orderBy(asc(channels.createdAt));
   return NextResponse.json({ channels: rows });
@@ -27,11 +29,11 @@ export async function POST(request: Request) {
 
   const data = parsed.data;
 
-  const existing = await db
+  const [existing] = await db
     .select({ id: channels.id })
     .from(channels)
     .where(sql`lower(${channels.name}) = lower(${data.name})`)
-    .get();
+    .limit(1);
 
   if (existing) {
     return NextResponse.json(
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
     accentColor,
   });
 
-  const created = await db.select().from(channels).where(eq(channels.id, id)).get();
+  const [created] = await db.select().from(channels).where(eq(channels.id, id)).limit(1);
 
   return NextResponse.json({ channel: created }, { status: 201 });
 }

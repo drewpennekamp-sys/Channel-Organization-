@@ -1,4 +1,10 @@
-import type { ChannelActivity, ChannelDTO, ChannelFormValues } from './types';
+import type {
+  ChannelActivity,
+  ChannelDTO,
+  ChannelFormValues,
+  DailyPlanDTO,
+  DashboardEntryDTO,
+} from './types';
 
 export class ApiError extends Error {
   fieldErrors?: Record<string, string[]>;
@@ -64,4 +70,29 @@ export async function updateChannel(id: string, values: ChannelFormValues): Prom
 export async function deleteChannel(id: string): Promise<void> {
   const res = await fetch(`/api/channels/${id}`, { method: 'DELETE' });
   await handle(res);
+}
+
+export async function fetchDashboard(): Promise<DashboardEntryDTO[]> {
+  const res = await fetch('/api/dashboard');
+  const data = await handle<{ entries: DashboardEntryDTO[] }>(res);
+  return data.entries;
+}
+
+export async function generateIdeaForChannel(channelId: string): Promise<DailyPlanDTO> {
+  const res = await fetch(`/api/channels/${channelId}/generate-idea`, { method: 'POST' });
+  const data = await handle<{ plan: DailyPlanDTO }>(res);
+  return data.plan;
+}
+
+export async function markChannelPosted(
+  channelId: string,
+  stats: { views: number; likes: number; comments: number }
+): Promise<DailyPlanDTO> {
+  const res = await fetch(`/api/channels/${channelId}/mark-posted`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(stats),
+  });
+  const data = await handle<{ plan: DailyPlanDTO }>(res);
+  return data.plan;
 }

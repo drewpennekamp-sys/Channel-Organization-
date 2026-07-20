@@ -37,7 +37,11 @@ function createConnection() {
       id TEXT PRIMARY KEY,
       channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
       idea_title TEXT NOT NULL,
+      hook TEXT,
+      video_prompt TEXT,
+      voiceover_script TEXT,
       post_status TEXT NOT NULL DEFAULT 'idea',
+      posted_at INTEGER,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
@@ -48,11 +52,33 @@ function createConnection() {
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
+    CREATE TABLE IF NOT EXISTS posted_videos (
+      id TEXT PRIMARY KEY,
+      daily_plan_id TEXT NOT NULL REFERENCES daily_plans(id) ON DELETE CASCADE,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      views INTEGER NOT NULL DEFAULT 0,
+      likes INTEGER NOT NULL DEFAULT 0,
+      comments INTEGER NOT NULL DEFAULT 0,
+      posted_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
   `);
+
+  const dailyPlanColumns = new Set(
+    (sqlite.pragma('table_info(daily_plans)') as Array<{ name: string }>).map((c) => c.name)
+  );
+  for (const [column, ddl] of Object.entries({
+    hook: 'ALTER TABLE daily_plans ADD COLUMN hook TEXT',
+    video_prompt: 'ALTER TABLE daily_plans ADD COLUMN video_prompt TEXT',
+    voiceover_script: 'ALTER TABLE daily_plans ADD COLUMN voiceover_script TEXT',
+    posted_at: 'ALTER TABLE daily_plans ADD COLUMN posted_at INTEGER',
+  })) {
+    if (!dailyPlanColumns.has(column)) sqlite.exec(ddl);
+  }
 
   const defaultToolStmt = sqlite.prepare(
     `INSERT OR IGNORE INTO settings (key, value) VALUES ('default_video_gen_tool', ?)`

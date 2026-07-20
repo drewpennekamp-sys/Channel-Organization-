@@ -11,3 +11,11 @@ export const channelInputSchema = z.object({
 });
 
 export type ChannelInput = z.infer<typeof channelInputSchema>;
+
+export const markPostedSchema = z.object({
+  views: z.number().int('Must be a whole number').min(0, 'Must be 0 or more'),
+  likes: z.number().int('Must be a whole number').min(0, 'Must be 0 or more'),
+  comments: z.number().int('Must be a whole number').min(0, 'Must be 0 or more'),
+});
+
+export type MarkPostedInput = z.infer<typeof markPostedSchema>;

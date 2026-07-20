@@ -58,6 +58,45 @@ export function formatRelativeTime(iso: string | null): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+export interface MonthlyTargetProgress {
+  postsThisMonth: number;
+  targetPerDay: number;
+  expectedByNow: number;
+  onPace: boolean;
+}
+
+/**
+ * Compares posts made so far this calendar month against a prorated target
+ * (target/day * days elapsed, today inclusive) rather than the full-month
+ * target, so "on pace" reads correctly on the 3rd as well as the 30th.
+ */
+export function computeMonthlyTargetProgress(
+  videos: PostedVideoDTO[],
+  targetPerDay: number,
+  now: Date = new Date()
+): MonthlyTargetProgress {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysElapsed = now.getDate();
+
+  let postsThisMonth = 0;
+  for (const video of videos) {
+    const postedAt = new Date(video.postedAt);
+    if (postedAt.getFullYear() === year && postedAt.getMonth() === month) {
+      postsThisMonth += 1;
+    }
+  }
+
+  const expectedByNow = targetPerDay * daysElapsed;
+
+  return {
+    postsThisMonth,
+    targetPerDay,
+    expectedByNow,
+    onPace: postsThisMonth >= expectedByNow,
+  };
+}
+
 export function latestSyncedAt(videos: PostedVideoDTO[]): string | null {
   let latest: string | null = null;
   for (const video of videos) {

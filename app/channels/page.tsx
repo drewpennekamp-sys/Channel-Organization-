@@ -1,6 +1,7 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
-import { channels, settings } from '@/lib/db/schema';
+import { channels } from '@/lib/db/schema';
+import { getSettings } from '@/lib/settings';
 import type { ChannelDTO } from '@/lib/types';
 import { ChannelsScreen } from '@/components/ChannelsScreen';
 
@@ -9,13 +10,10 @@ export const dynamic = 'force-dynamic';
 async function getInitialData(): Promise<{
   channels: ChannelDTO[];
   defaultVideoGenTool: string;
+  defaultNeedsVoiceover: boolean;
 }> {
   const rows = await db.select().from(channels).orderBy(asc(channels.createdAt));
-  const toolRow = await db
-    .select()
-    .from(settings)
-    .where(eq(settings.key, 'default_video_gen_tool'))
-    .get();
+  const settings = await getSettings();
 
   return {
     channels: rows.map((row) => ({
@@ -30,14 +28,20 @@ async function getInitialData(): Promise<{
       accentColor: row.accentColor,
       createdAt: row.createdAt.toISOString(),
     })),
-    defaultVideoGenTool: toolRow?.value ?? '',
+    defaultVideoGenTool: settings.defaultVideoGenTool,
+    defaultNeedsVoiceover: settings.defaultNeedsVoiceover,
   };
 }
 
 export default async function Page() {
-  const { channels: initialChannels, defaultVideoGenTool } = await getInitialData();
+  const { channels: initialChannels, defaultVideoGenTool, defaultNeedsVoiceover } =
+    await getInitialData();
 
   return (
-    <ChannelsScreen initialChannels={initialChannels} defaultVideoGenTool={defaultVideoGenTool} />
+    <ChannelsScreen
+      initialChannels={initialChannels}
+      defaultVideoGenTool={defaultVideoGenTool}
+      defaultNeedsVoiceover={defaultNeedsVoiceover}
+    />
   );
 }

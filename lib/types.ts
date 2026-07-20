@@ -1,4 +1,27 @@
 export type Owner = 'you' | 'friend';
+export type OwnerView = Owner | 'all';
+
+export interface SettingsDTO {
+  defaultVideoGenTool: string;
+  defaultPostingTarget: number;
+  defaultNeedsVoiceover: boolean;
+  autoSyncEnabled: boolean;
+  autoSyncIntervalMinutes: number;
+  pollIntervalSeconds: number;
+}
+
+export interface KeyStatus {
+  present: boolean;
+  masked: string | null;
+}
+
+export interface SettingsResponseDTO {
+  settings: SettingsDTO;
+  keys: {
+    anthropic: KeyStatus;
+    vidiq: KeyStatus;
+  };
+}
 
 export type PostStatus = 'idea' | 'scripted' | 'rendering' | 'scheduled' | 'posted';
 

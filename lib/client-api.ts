@@ -7,8 +7,11 @@ import type {
   InsightDTO,
   ManualInsightPayload,
   PostedVideoDTO,
+  SettingsDTO,
+  SettingsResponseDTO,
   VideoPayload,
 } from './types';
+import { downloadBlob } from './download';
 
 export class ApiError extends Error {
   fieldErrors?: Record<string, string[]>;
@@ -142,6 +145,53 @@ export async function analyzeChannel(channelId: string): Promise<InsightDTO> {
   const res = await fetch(`/api/channels/${channelId}/analyze`, { method: 'POST' });
   const data = await handle<{ insight: InsightDTO }>(res);
   return data.insight;
+}
+
+export async function fetchSettings(): Promise<SettingsResponseDTO> {
+  const res = await fetch('/api/settings');
+  return handle(res);
+}
+
+export async function updateSettingsApi(partial: Partial<SettingsDTO>): Promise<SettingsResponseDTO> {
+  const res = await fetch('/api/settings', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(partial),
+  });
+  return handle(res);
+}
+
+async function downloadFrom(path: string, filename: string): Promise<void> {
+  const res = await fetch(path);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(body.error ?? 'Export failed');
+  }
+  const blob = await res.blob();
+  downloadBlob(blob, filename);
+}
+
+export async function exportTodayPrompts(): Promise<void> {
+  await downloadFrom(
+    '/api/export/today',
+    `shorts-factory-today-${new Date().toISOString().slice(0, 10)}.md`
+  );
+}
+
+export async function exportAllData(): Promise<void> {
+  await downloadFrom(
+    '/api/export/all',
+    `shorts-factory-backup-${new Date().toISOString().slice(0, 10)}.json`
+  );
+}
+
+export async function importData(data: unknown): Promise<{ counts: Record<string, number> }> {
+  const res = await fetch('/api/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return handle(res);
 }
 
 export async function addManualInsight(

@@ -30,14 +30,14 @@ const STATUS_COLOR: Record<string, string> = {
   posted: 'bg-emerald-500/15 text-emerald-300',
 };
 
-function emptyValues(defaultTool: string): ChannelFormValues {
+function emptyValues(defaultTool: string, defaultNeedsVoiceover: boolean): ChannelFormValues {
   return {
     name: '',
     niche: '',
     owner: 'you',
     platformHandle: '',
     videoGenTool: defaultTool,
-    needsVoiceover: false,
+    needsVoiceover: defaultNeedsVoiceover,
     voiceStyle: '',
   };
 }
@@ -82,6 +82,7 @@ export function ChannelPanel({
   mode,
   channel,
   defaultVideoGenTool,
+  defaultNeedsVoiceover,
   existingChannels,
   onClose,
   onCreated,
@@ -91,6 +92,7 @@ export function ChannelPanel({
   mode: PanelMode;
   channel?: ChannelDTO;
   defaultVideoGenTool: string;
+  defaultNeedsVoiceover: boolean;
   existingChannels: ChannelDTO[];
   onClose: () => void;
   onCreated: (channel: ChannelDTO) => void;
@@ -99,7 +101,7 @@ export function ChannelPanel({
 }) {
   const isFormMode = mode === 'add' || mode === 'edit';
   const [values, setValues] = useState<ChannelFormValues>(() =>
-    channel ? valuesFromChannel(channel) : emptyValues(defaultVideoGenTool)
+    channel ? valuesFromChannel(channel) : emptyValues(defaultVideoGenTool, defaultNeedsVoiceover)
   );
   const [touched, setTouched] = useState<Partial<Record<Field, boolean>>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -116,11 +118,13 @@ export function ChannelPanel({
     .map((c) => c.name.toLowerCase());
 
   useEffect(() => {
-    setValues(channel ? valuesFromChannel(channel) : emptyValues(defaultVideoGenTool));
+    setValues(
+      channel ? valuesFromChannel(channel) : emptyValues(defaultVideoGenTool, defaultNeedsVoiceover)
+    );
     setTouched({});
     setSubmitError(null);
     setServerFieldErrors({});
-  }, [mode, channel, defaultVideoGenTool]);
+  }, [mode, channel, defaultVideoGenTool, defaultNeedsVoiceover]);
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {

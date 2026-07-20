@@ -3,12 +3,19 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2, Plus, RefreshCw } from 'lucide-react';
 import type { ChannelDTO, PostedVideoDTO } from '@/lib/types';
-import { computeChannelStats, formatCompactNumber, formatRelativeTime, latestSyncedAt } from '@/lib/videoLog';
+import {
+  computeChannelStats,
+  computeMonthlyTargetProgress,
+  formatCompactNumber,
+  formatRelativeTime,
+  latestSyncedAt,
+} from '@/lib/videoLog';
 import { VideoLogTable } from './VideoLogTable';
 
 export function ChannelLogSection({
   channel,
   videos,
+  targetPerDay,
   isSyncing,
   onSync,
   onAddVideo,
@@ -18,6 +25,7 @@ export function ChannelLogSection({
 }: {
   channel: ChannelDTO;
   videos: PostedVideoDTO[];
+  targetPerDay: number;
   isSyncing: boolean;
   onSync: () => void;
   onAddVideo: () => void;
@@ -27,6 +35,7 @@ export function ChannelLogSection({
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const stats = computeChannelStats(videos);
+  const progress = computeMonthlyTargetProgress(videos, targetPerDay);
 
   const summaryLine =
     stats.count === 0
@@ -62,6 +71,14 @@ export function ChannelLogSection({
         </button>
 
         <div className="flex shrink-0 items-center gap-2">
+          <span
+            className={`hidden text-xs font-light sm:inline ${
+              progress.onPace ? 'text-zinc-500' : 'text-amber-400/80'
+            }`}
+            title={`${progress.postsThisMonth} posted this month vs. a target of ${progress.targetPerDay}/day`}
+          >
+            {progress.postsThisMonth}/{progress.expectedByNow} this month
+          </span>
           <span className="hidden text-xs font-light text-zinc-600 sm:inline">
             Last synced: {formatRelativeTime(latestSyncedAt(videos))}
           </span>

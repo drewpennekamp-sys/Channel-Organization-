@@ -1,6 +1,8 @@
 import { asc, desc } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
 import { channels, postedVideos } from '@/lib/db/schema';
+import { getSettings } from '@/lib/settings';
+import { vidiqKeyStatus } from '@/lib/envKeys';
 import type { ChannelDTO, PostedVideoDTO, VideoLogEntryDTO } from '@/lib/types';
 import { VideoLogScreen } from '@/components/VideoLogScreen';
 
@@ -59,5 +61,13 @@ async function getInitialEntries(): Promise<VideoLogEntryDTO[]> {
 
 export default async function Page() {
   const entries = await getInitialEntries();
-  return <VideoLogScreen initialEntries={entries} />;
+  const settings = await getSettings();
+
+  return (
+    <VideoLogScreen
+      initialEntries={entries}
+      settings={settings}
+      vidiqKeyPresent={vidiqKeyStatus().present}
+    />
+  );
 }

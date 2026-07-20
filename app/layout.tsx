@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Sora, Inter } from 'next/font/google';
 import { NavHeader } from '@/components/NavHeader';
+import { OwnerFilterProvider } from '@/components/OwnerFilterProvider';
 import './globals.css';
 
 const heading = Sora({
@@ -26,8 +27,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${heading.variable} ${body.variable} dark`}>
       <body className="min-h-screen bg-zinc-950 font-body text-zinc-100 antialiased">
-        <NavHeader />
-        {children}
+        <OwnerFilterProvider>
+          <NavHeader />
+          {children}
+        </OwnerFilterProvider>
       </body>
     </html>
   );

@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Plus } from 'lucide-react';
 import type { ChannelDTO } from '@/lib/types';
 import { deleteChannel } from '@/lib/client-api';
+import { useOwnerFilter, matchesOwnerView } from './OwnerFilterProvider';
+import { OwnerViewEmptyState } from './OwnerViewEmptyState';
 import { ChannelGrid } from './ChannelGrid';
 import { EmptyState } from './EmptyState';
 import { ChannelPanel } from './ChannelPanel';
@@ -18,12 +20,20 @@ type PanelState =
 export function ChannelsScreen({
   initialChannels,
   defaultVideoGenTool,
+  defaultNeedsVoiceover,
 }: {
   initialChannels: ChannelDTO[];
   defaultVideoGenTool: string;
+  defaultNeedsVoiceover: boolean;
 }) {
   const [channels, setChannels] = useState<ChannelDTO[]>(initialChannels);
   const [panel, setPanel] = useState<PanelState>(null);
+  const { view } = useOwnerFilter();
+
+  const visibleChannels = useMemo(
+    () => channels.filter((c) => matchesOwnerView(c.owner, view)),
+    [channels, view]
+  );
 
   function handleCreated(channel: ChannelDTO) {
     setChannels((prev) => [...prev, channel]);
@@ -68,9 +78,11 @@ export function ChannelsScreen({
       <div className="mt-8">
         {channels.length === 0 ? (
           <EmptyState onAdd={() => setPanel({ mode: 'add' })} />
+        ) : visibleChannels.length === 0 ? (
+          <OwnerViewEmptyState noun="channels" />
         ) : (
           <ChannelGrid
-            channels={channels}
+            channels={visibleChannels}
             onView={(channel) => setPanel({ mode: 'view', channel })}
             onEdit={(channel) => setPanel({ mode: 'edit', channel })}
             onDelete={handleDelete}
@@ -96,6 +108,7 @@ export function ChannelsScreen({
             mode={panel.mode}
             channel={panel.mode === 'add' ? undefined : panel.channel}
             defaultVideoGenTool={defaultVideoGenTool}
+            defaultNeedsVoiceover={defaultNeedsVoiceover}
             existingChannels={channels}
             onClose={() => setPanel(null)}
             onCreated={handleCreated}

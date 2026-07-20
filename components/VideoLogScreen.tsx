@@ -1,16 +1,19 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import { Loader2, RefreshCw } from 'lucide-react';
-import type { PostedVideoDTO, VideoLogEntryDTO, VideoPayload } from '@/lib/types';
+import type { PostedVideoDTO, SettingsDTO, VideoLogEntryDTO, VideoPayload } from '@/lib/types';
 import {
   createVideoForChannel,
   deleteVideo,
   syncChannelVideos,
   updateVideo,
 } from '@/lib/client-api';
+import { useOwnerFilter, matchesOwnerView } from './OwnerFilterProvider';
+import { OwnerViewEmptyState } from './OwnerViewEmptyState';
+import { MissingKeyBanner } from './MissingKeyBanner';
 import { ChannelLogSection } from './ChannelLogSection';
 import { VideoLogPanel } from './VideoLogPanel';
 
@@ -19,12 +22,29 @@ type PanelState =
   | { mode: 'edit'; channelId: string; channelName: string; video: PostedVideoDTO }
   | null;
 
-export function VideoLogScreen({ initialEntries }: { initialEntries: VideoLogEntryDTO[] }) {
+export function VideoLogScreen({
+  initialEntries,
+  settings,
+  vidiqKeyPresent,
+}: {
+  initialEntries: VideoLogEntryDTO[];
+  settings: SettingsDTO;
+  vidiqKeyPresent: boolean;
+}) {
   const [entries, setEntries] = useState<VideoLogEntryDTO[]>(initialEntries);
   const [panel, setPanel] = useState<PanelState>(null);
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
+  const { view } = useOwnerFilter();
 
-  const channelsWithVideos = useMemo(() => entries.filter((e) => e.videos.length > 0), [entries]);
+  const visibleEntries = useMemo(
+    () => entries.filter((e) => matchesOwnerView(e.channel.owner, view)),
+    [entries, view]
+  );
+
+  const channelsWithVideos = useMemo(
+    () => visibleEntries.filter((e) => e.videos.length > 0),
+    [visibleEntries]
+  );
   const syncingAll = channelsWithVideos.some((e) => syncingIds.has(e.channel.id));
 
   function updateChannelVideos(channelId: string, updater: (videos: PostedVideoDTO[]) => PostedVideoDTO[]) {
@@ -79,6 +99,16 @@ export function VideoLogScreen({ initialEntries }: { initialEntries: VideoLogEnt
     }
   }
 
+  const handleSyncAllRef = useRef(handleSyncAll);
+  handleSyncAllRef.current = handleSyncAll;
+
+  useEffect(() => {
+    if (!settings.autoSyncEnabled) return;
+    const ms = settings.autoSyncIntervalMinutes * 60 * 1000;
+    const id = setInterval(() => handleSyncAllRef.current(), ms);
+    return () => clearInterval(id);
+  }, [settings.autoSyncEnabled, settings.autoSyncIntervalMinutes]);
+
   return (
     <main className="mx-auto max-w-6xl px-6 py-10 sm:px-8 lg:px-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -108,6 +138,13 @@ export function VideoLogScreen({ initialEntries }: { initialEntries: VideoLogEnt
         )}
       </div>
 
+      {!vidiqKeyPresent && (
+        <MissingKeyBanner
+          keyLabel="vidIQ credentials"
+          reason="background sync won't be able to pull real stats until they're added"
+        />
+      )}
+
       {entries.length === 0 ? (
         <div className="mt-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 px-6 py-24 text-center">
           <h2 className="font-heading text-xl font-semibold tracking-tight text-zinc-50">
@@ -124,13 +161,16 @@ export function VideoLogScreen({ initialEntries }: { initialEntries: VideoLogEnt
             Go to Channels
           </Link>
         </div>
+      ) : visibleEntries.length === 0 ? (
+        <OwnerViewEmptyState noun="channels" />
       ) : (
         <div className="mt-8 space-y-5">
-          {entries.map(({ channel, videos }) => (
+          {visibleEntries.map(({ channel, videos }) => (
             <ChannelLogSection
               key={channel.id}
               channel={channel}
               videos={videos}
+              targetPerDay={settings.defaultPostingTarget}
               isSyncing={syncingIds.has(channel.id)}
               onSync={() => handleSync(channel.id)}
               onAddVideo={() => setPanel({ mode: 'add', channelId: channel.id, channelName: channel.name })}

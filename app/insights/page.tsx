@@ -3,7 +3,8 @@ import { db } from '@/lib/db/client';
 import { channels, insights, postedVideos } from '@/lib/db/schema';
 import { toInsightDTO } from '@/lib/insights';
 import { computePortfolioSummary } from '@/lib/portfolio';
-import type { ChannelDTO, InsightEntryDTO, PostedVideoDTO } from '@/lib/types';
+import { anthropicKeyStatus } from '@/lib/envKeys';
+import type { ChannelDTO, InsightEntryDTO, OwnerView, PortfolioSummaryDTO, PostedVideoDTO } from '@/lib/types';
 import { InsightsScreen } from '@/components/InsightsScreen';
 
 export const dynamic = 'force-dynamic';
@@ -73,17 +74,29 @@ async function getInitialData() {
     };
   });
 
-  const portfolio = computePortfolioSummary(
-    allChannels.map((channel) => ({
-      channel: toChannelDTO(channel),
-      videos: videosByChannel.get(channel.id) ?? [],
-    }))
-  );
+  const channelDataForPortfolio = allChannels.map((channel) => ({
+    channel: toChannelDTO(channel),
+    videos: videosByChannel.get(channel.id) ?? [],
+  }));
 
-  return { entries, portfolio };
+  const portfolioByView: Record<OwnerView, PortfolioSummaryDTO> = {
+    all: computePortfolioSummary(channelDataForPortfolio),
+    you: computePortfolioSummary(channelDataForPortfolio.filter((c) => c.channel.owner === 'you')),
+    friend: computePortfolioSummary(
+      channelDataForPortfolio.filter((c) => c.channel.owner === 'friend')
+    ),
+  };
+
+  return { entries, portfolioByView };
 }
 
 export default async function Page() {
-  const { entries, portfolio } = await getInitialData();
-  return <InsightsScreen initialEntries={entries} portfolio={portfolio} />;
+  const { entries, portfolioByView } = await getInitialData();
+  return (
+    <InsightsScreen
+      initialEntries={entries}
+      portfolioByView={portfolioByView}
+      anthropicKeyPresent={anthropicKeyStatus().present}
+    />
+  );
 }

@@ -1,10 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
-import type { InsightDTO, InsightEntryDTO, PortfolioSummaryDTO } from '@/lib/types';
+import type { InsightDTO, InsightEntryDTO, OwnerView, PortfolioSummaryDTO } from '@/lib/types';
 import { addManualInsight, analyzeChannel } from '@/lib/client-api';
+import { useOwnerFilter, matchesOwnerView } from './OwnerFilterProvider';
+import { OwnerViewEmptyState } from './OwnerViewEmptyState';
+import { MissingKeyBanner } from './MissingKeyBanner';
 import { PortfolioSummary } from './PortfolioSummary';
 import { InsightCard } from './InsightCard';
 import { ManualInsightPanel } from './ManualInsightPanel';
@@ -21,15 +24,24 @@ function withNewInsight(entry: InsightEntryDTO, insight: InsightDTO): InsightEnt
 
 export function InsightsScreen({
   initialEntries,
-  portfolio,
+  portfolioByView,
+  anthropicKeyPresent,
 }: {
   initialEntries: InsightEntryDTO[];
-  portfolio: PortfolioSummaryDTO;
+  portfolioByView: Record<OwnerView, PortfolioSummaryDTO>;
+  anthropicKeyPresent: boolean;
 }) {
   const [entries, setEntries] = useState<InsightEntryDTO[]>(initialEntries);
   const [analyzingIds, setAnalyzingIds] = useState<Set<string>>(new Set());
   const [analyzeErrors, setAnalyzeErrors] = useState<Record<string, string>>({});
   const [notePanel, setNotePanel] = useState<NotePanelState>(null);
+  const { view } = useOwnerFilter();
+
+  const visibleEntries = useMemo(
+    () => entries.filter((e) => matchesOwnerView(e.channel.owner, view)),
+    [entries, view]
+  );
+  const portfolio = portfolioByView[view];
 
   async function handleAnalyze(channelId: string) {
     setAnalyzingIds((prev) => new Set(prev).add(channelId));
@@ -76,6 +88,13 @@ export function InsightsScreen({
         </p>
       </div>
 
+      {!anthropicKeyPresent && (
+        <MissingKeyBanner
+          keyLabel="The Anthropic API key"
+          reason="analysis will fail until it's added"
+        />
+      )}
+
       {entries.length === 0 ? (
         <div className="mt-8 flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/40 px-6 py-24 text-center">
           <h2 className="font-heading text-xl font-semibold tracking-tight text-zinc-50">
@@ -92,6 +111,8 @@ export function InsightsScreen({
             Add a channel
           </Link>
         </div>
+      ) : visibleEntries.length === 0 ? (
+        <OwnerViewEmptyState noun="channels" />
       ) : (
         <>
           <div className="mt-8">
@@ -99,7 +120,7 @@ export function InsightsScreen({
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {entries.map((entry) => (
+            {visibleEntries.map((entry) => (
               <InsightCard
                 key={entry.channel.id}
                 entry={entry}

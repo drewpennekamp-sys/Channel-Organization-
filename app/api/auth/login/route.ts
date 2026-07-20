@@ -29,7 +29,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Incorrect password' }, { status: 401 });
   }
 
-  const token = await createSessionToken();
+  let token: string;
+  try {
+    token = await createSessionToken();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to create a session.';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+
   const res = NextResponse.json({ ok: true });
   res.cookies.set(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
   return res;

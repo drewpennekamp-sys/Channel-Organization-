@@ -29,16 +29,25 @@ export interface GeneratedIdea {
   voiceoverScript: string | null;
 }
 
-export function generateIdea(niche: string, needsVoiceover: boolean, voiceStyle: string | null): GeneratedIdea {
+export function generateIdea(
+  niche: string,
+  needsVoiceover: boolean,
+  voiceStyle: string | null,
+  insightRecommendation?: string | null
+): GeneratedIdea {
   const title = fillTemplate(pick(TITLE_TEMPLATES), niche);
   const hook = fillTemplate(pick(HOOK_TEMPLATES), niche);
 
-  const videoPrompt = [
+  const videoPromptLines = [
     `Vertical short-form video, 30-45 seconds, niche: ${niche}.`,
     `Open on a bold hook frame: "${hook}"`,
     'Fast cuts every 1-2 seconds, high-contrast captions burned in, punchy sound design.',
     'Close on a clear payoff and a one-line call to action to follow for more.',
-  ].join('\n');
+  ];
+  if (insightRecommendation) {
+    videoPromptLines.push(`Apply the latest channel insight: ${insightRecommendation}`);
+  }
+  const videoPrompt = videoPromptLines.join('\n');
 
   const voiceoverScript = needsVoiceover
     ? [

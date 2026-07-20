@@ -73,6 +73,16 @@ export function DashboardCard({
             <div>
               <p className="font-medium text-zinc-100">{plan.ideaTitle}</p>
               {plan.hook && <p className="mt-1 text-sm italic text-zinc-500">{plan.hook}</p>}
+              {plan.informedByInsightDate && (
+                <p className="mt-1.5 text-xs font-light text-zinc-500">
+                  Informed by{' '}
+                  {new Date(plan.informedByInsightDate).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                  })}{' '}
+                  analysis
+                </p>
+              )}
             </div>
 
             {plan.videoPrompt && <CollapsibleSection title="Video prompt" content={plan.videoPrompt} />}

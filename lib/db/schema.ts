@@ -31,6 +31,9 @@ export const dailyPlans = sqliteTable('daily_plans', {
     .notNull()
     .default('idea'),
   postedAt: integer('posted_at', { mode: 'timestamp' }),
+  informedByInsightId: text('informed_by_insight_id').references(() => insights.id, {
+    onDelete: 'set null',
+  }),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .default(sql`(unixepoch())`),
@@ -61,7 +64,14 @@ export const insights = sqliteTable('insights', {
   channelId: text('channel_id')
     .notNull()
     .references(() => channels.id, { onDelete: 'cascade' }),
+  date: integer('date', { mode: 'timestamp' })
+    .notNull()
+    .default(sql`(unixepoch())`),
   summary: text('summary').notNull(),
+  recommendations: text('recommendations').notNull().default('[]'),
+  source: text('source', { enum: ['claude', 'manual'] })
+    .notNull()
+    .default('claude'),
   createdAt: integer('created_at', { mode: 'timestamp' })
     .notNull()
     .default(sql`(unixepoch())`),

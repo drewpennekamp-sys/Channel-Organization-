@@ -1,6 +1,6 @@
 import { asc, desc } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
-import { channels, dailyPlans } from '@/lib/db/schema';
+import { channels, dailyPlans, insights } from '@/lib/db/schema';
 import type { ChannelDTO, DailyPlanDTO, DashboardEntryDTO } from '@/lib/types';
 import { DashboardScreen } from '@/components/DashboardScreen';
 
@@ -21,7 +21,14 @@ function toChannelDTO(row: typeof channels.$inferSelect): ChannelDTO {
   };
 }
 
-function toPlanDTO(row: typeof dailyPlans.$inferSelect): DailyPlanDTO {
+function toPlanDTO(
+  row: typeof dailyPlans.$inferSelect,
+  insightDateById: Map<string, Date>
+): DailyPlanDTO {
+  const informedByInsightDate = row.informedByInsightId
+    ? insightDateById.get(row.informedByInsightId) ?? null
+    : null;
+
   return {
     id: row.id,
     channelId: row.channelId,
@@ -31,6 +38,8 @@ function toPlanDTO(row: typeof dailyPlans.$inferSelect): DailyPlanDTO {
     voiceoverScript: row.voiceoverScript,
     postStatus: row.postStatus,
     postedAt: row.postedAt ? row.postedAt.toISOString() : null,
+    informedByInsightId: row.informedByInsightId,
+    informedByInsightDate: informedByInsightDate ? informedByInsightDate.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -38,6 +47,8 @@ function toPlanDTO(row: typeof dailyPlans.$inferSelect): DailyPlanDTO {
 async function getInitialEntries(): Promise<DashboardEntryDTO[]> {
   const allChannels = await db.select().from(channels).orderBy(asc(channels.createdAt));
   const allPlans = await db.select().from(dailyPlans).orderBy(desc(dailyPlans.createdAt));
+  const allInsights = await db.select({ id: insights.id, date: insights.date }).from(insights);
+  const insightDateById = new Map(allInsights.map((i) => [i.id, i.date]));
 
   const latestPlanByChannel = new Map<string, typeof allPlans[number]>();
   for (const plan of allPlans) {
@@ -50,7 +61,7 @@ async function getInitialEntries(): Promise<DashboardEntryDTO[]> {
     const plan = latestPlanByChannel.get(channel.id);
     return {
       channel: toChannelDTO(channel),
-      plan: plan ? toPlanDTO(plan) : null,
+      plan: plan ? toPlanDTO(plan, insightDateById) : null,
     };
   });
 }

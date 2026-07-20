@@ -38,3 +38,12 @@ export type VideoInput = z.infer<typeof videoInputSchema>;
 export const videoUpdateSchema = videoInputSchema.partial();
 
 export type VideoUpdateInput = z.infer<typeof videoUpdateSchema>;
+
+export const manualInsightSchema = z.object({
+  summary: z.string().trim().min(1, 'Summary is required').max(500, 'Keep it under 500 characters'),
+  recommendations: z
+    .array(z.string().trim().min(1).max(200, 'Keep each recommendation under 200 characters'))
+    .max(6, 'Keep it to 6 recommendations or fewer'),
+});
+
+export type ManualInsightInput = z.infer<typeof manualInsightSchema>;

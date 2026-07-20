@@ -24,6 +24,8 @@ export interface DailyPlanDTO {
   voiceoverScript: string | null;
   postStatus: PostStatus;
   postedAt: string | null;
+  informedByInsightId: string | null;
+  informedByInsightDate: string | null;
   createdAt: string;
 }
 
@@ -70,16 +72,51 @@ export interface VideoLogEntryDTO {
   videos: PostedVideoDTO[];
 }
 
+export type InsightSource = 'claude' | 'manual';
+
 export interface InsightDTO {
   id: string;
   channelId: string;
+  date: string;
   summary: string;
+  recommendations: string[];
+  source: InsightSource;
   createdAt: string;
 }
 
 export interface ChannelActivity {
   recentPlans: DailyPlanDTO[];
   latestInsight: InsightDTO | null;
+}
+
+export interface InsightEntryDTO {
+  channel: ChannelDTO;
+  videoCount: number;
+  latest: InsightDTO | null;
+  history: InsightDTO[];
+}
+
+export interface ChannelGrowth {
+  channelId: string;
+  name: string;
+  accentColor: string;
+  thisWeekViews: number;
+  lastWeekViews: number;
+  delta: number;
+}
+
+export interface PortfolioSummaryDTO {
+  totalViewsThisWeek: number;
+  totalViewsLastWeek: number;
+  totalViewsDelta: number;
+  fastestGrowing: ChannelGrowth | null;
+  lagging: ChannelGrowth | null;
+  hasEnoughData: boolean;
+}
+
+export interface ManualInsightPayload {
+  summary: string;
+  recommendations: string[];
 }
 
 export type DashboardCardState = 'no-idea' | 'idea' | 'posted';

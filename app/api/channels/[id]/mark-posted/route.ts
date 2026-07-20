@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, ne } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
-import { channels, dailyPlans, postedVideos } from '@/lib/db/schema';
+import { channels, dailyPlans, insights, postedVideos } from '@/lib/db/schema';
 import { markPostedSchema } from '@/lib/validation';
+import type { DailyPlanDTO } from '@/lib/types';
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const channel = await db.select().from(channels).where(eq(channels.id, params.id)).get();
@@ -56,6 +57,27 @@ export async function POST(request: Request, { params }: { params: { id: string 
   });
 
   const plan = await db.select().from(dailyPlans).where(eq(dailyPlans.id, currentPlan.id)).get();
+  if (!plan) {
+    return NextResponse.json({ error: 'Failed to mark as posted' }, { status: 500 });
+  }
 
-  return NextResponse.json({ plan });
+  const informingInsight = plan.informedByInsightId
+    ? await db.select().from(insights).where(eq(insights.id, plan.informedByInsightId)).get()
+    : undefined;
+
+  const dto: DailyPlanDTO = {
+    id: plan.id,
+    channelId: plan.channelId,
+    ideaTitle: plan.ideaTitle,
+    hook: plan.hook,
+    videoPrompt: plan.videoPrompt,
+    voiceoverScript: plan.voiceoverScript,
+    postStatus: plan.postStatus,
+    postedAt: plan.postedAt ? plan.postedAt.toISOString() : null,
+    informedByInsightId: plan.informedByInsightId,
+    informedByInsightDate: informingInsight ? informingInsight.date.toISOString() : null,
+    createdAt: plan.createdAt.toISOString(),
+  };
+
+  return NextResponse.json({ plan: dto });
 }

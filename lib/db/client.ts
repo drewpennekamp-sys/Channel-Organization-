@@ -33,6 +33,16 @@ function createConnection() {
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
+    CREATE TABLE IF NOT EXISTS insights (
+      id TEXT PRIMARY KEY,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      date INTEGER NOT NULL DEFAULT (unixepoch()),
+      summary TEXT NOT NULL,
+      recommendations TEXT NOT NULL DEFAULT '[]',
+      source TEXT NOT NULL DEFAULT 'claude',
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
     CREATE TABLE IF NOT EXISTS daily_plans (
       id TEXT PRIMARY KEY,
       channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
@@ -42,13 +52,7 @@ function createConnection() {
       voiceover_script TEXT,
       post_status TEXT NOT NULL DEFAULT 'idea',
       posted_at INTEGER,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch())
-    );
-
-    CREATE TABLE IF NOT EXISTS insights (
-      id TEXT PRIMARY KEY,
-      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
-      summary TEXT NOT NULL,
+      informed_by_insight_id TEXT REFERENCES insights(id) ON DELETE SET NULL,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
@@ -74,6 +78,17 @@ function createConnection() {
     );
   `);
 
+  const insightColumns = new Set(
+    (sqlite.pragma('table_info(insights)') as Array<{ name: string }>).map((c) => c.name)
+  );
+  for (const [column, ddl] of Object.entries({
+    date: 'ALTER TABLE insights ADD COLUMN date INTEGER NOT NULL DEFAULT (unixepoch())',
+    recommendations: "ALTER TABLE insights ADD COLUMN recommendations TEXT NOT NULL DEFAULT '[]'",
+    source: "ALTER TABLE insights ADD COLUMN source TEXT NOT NULL DEFAULT 'claude'",
+  })) {
+    if (!insightColumns.has(column)) sqlite.exec(ddl);
+  }
+
   const dailyPlanColumns = new Set(
     (sqlite.pragma('table_info(daily_plans)') as Array<{ name: string }>).map((c) => c.name)
   );
@@ -82,6 +97,7 @@ function createConnection() {
     video_prompt: 'ALTER TABLE daily_plans ADD COLUMN video_prompt TEXT',
     voiceover_script: 'ALTER TABLE daily_plans ADD COLUMN voiceover_script TEXT',
     posted_at: 'ALTER TABLE daily_plans ADD COLUMN posted_at INTEGER',
+    informed_by_insight_id: 'ALTER TABLE daily_plans ADD COLUMN informed_by_insight_id TEXT REFERENCES insights(id) ON DELETE SET NULL',
   })) {
     if (!dailyPlanColumns.has(column)) sqlite.exec(ddl);
   }

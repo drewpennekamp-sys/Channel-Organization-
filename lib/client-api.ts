@@ -4,6 +4,8 @@ import type {
   ChannelFormValues,
   DailyPlanDTO,
   DashboardEntryDTO,
+  InsightDTO,
+  ManualInsightPayload,
   PostedVideoDTO,
   VideoPayload,
 } from './types';
@@ -134,4 +136,23 @@ export async function syncChannelVideos(channelId: string): Promise<PostedVideoD
   const res = await fetch(`/api/channels/${channelId}/sync-videos`, { method: 'POST' });
   const data = await handle<{ videos: PostedVideoDTO[] }>(res);
   return data.videos;
+}
+
+export async function analyzeChannel(channelId: string): Promise<InsightDTO> {
+  const res = await fetch(`/api/channels/${channelId}/analyze`, { method: 'POST' });
+  const data = await handle<{ insight: InsightDTO }>(res);
+  return data.insight;
+}
+
+export async function addManualInsight(
+  channelId: string,
+  payload: ManualInsightPayload
+): Promise<InsightDTO> {
+  const res = await fetch(`/api/channels/${channelId}/insights`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await handle<{ insight: InsightDTO }>(res);
+  return data.insight;
 }

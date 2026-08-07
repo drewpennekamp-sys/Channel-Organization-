@@ -1,0 +1,89 @@
+{
+  "id": "protoform-1567-00",
+  "manufacturer": "PROTOform",
+  "name": "1971 Chevrolet Camaro Z28",
+  "partNumber": "1567-00",
+  "scale": "1/10",
+  "class": "on-road",
+  "dimensionsMm": {
+    "length": 489,
+    "widthFront": 195,
+    "widthRear": 195,
+    "height": 112,
+    "wheelbase": 272,
+    "frontOverhang": 80,
+    "rearOverhang": 137,
+    "trackWidth": 195,
+    "roofWidth": 183
+  },
+  "bodyWeightG": 160,
+  "material": "clear-polycarbonate",
+
+  "panels": [
+    {
+      "id": "side-left",
+      "label": "Left side",
+      "widthMm": 489,
+      "heightMm": 112,
+      "outline": "M0,0 L489,0 L489,112 L0,112 Z",
+      "cutouts": [
+        {
+          "id": "wheel-arch-front",
+          "d": "M46,112 a34,34 0 0 1 68,0 Z"
+        },
+        {
+          "id": "wheel-arch-rear",
+          "d": "M316,112 a36,36 0 0 1 72,0 Z"
+        }
+      ],
+      "curvature": "low",
+      "mirrorOf": null
+    },
+    { "id": "side-right", "mirrorOf": "side-left" },
+    {
+      "id": "hood",
+      "widthMm": 195,
+      "heightMm": 140,
+      "outline": "M0,0 L195,0 L195,140 L0,140 Z",
+      "curvature": "medium",
+      "mirrorOf": null
+    },
+    {
+      "id": "roof",
+      "widthMm": 183,
+      "heightMm": 120,
+      "outline": "M0,0 L183,0 L183,120 L0,120 Z",
+      "curvature": "medium",
+      "mirrorOf": null
+    },
+    {
+      "id": "trunk",
+      "widthMm": 195,
+      "heightMm": 110,
+      "outline": "M0,0 L195,0 L195,110 L0,110 Z",
+      "curvature": "medium",
+      "mirrorOf": null
+    },
+    {
+      "id": "front-fascia",
+      "widthMm": 195,
+      "heightMm": 90,
+      "outline": "M0,0 L195,0 L195,90 L0,90 Z",
+      "curvature": "high",
+      "mirrorOf": null
+    },
+    {
+      "id": "rear-fascia",
+      "widthMm": 195,
+      "heightMm": 90,
+      "outline": "M0,0 L195,0 L195,90 L0,90 Z",
+      "curvature": "high",
+      "mirrorOf": null
+    }
+  ],
+
+  "views": [],
+
+  "notes": "dimensionsMm is real measured data from the PROTOform 1567-00 spec sheet (length/width/height/wheelbase/overhangs/roofWidth). TODO(needs physical measurement): every panel `outline` below except side-left/side-right's wheel-arch treatment is an axis-aligned RECTANGLE sized to the panel's known width/height, not a traced body panel — hood, roof, trunk, front-fascia, and rear-fascia all need real outlines pulled from a trimmed body flat or the vendor spec sheet before this body can move from status=draft to status=verified. The side-panel wheel-arch cutouts are derived from dimensionsMm (front arch centered at frontOverhang=80mm, rear arch centered at frontOverhang+wheelbase=352mm, radii estimated from typical 1/10 tire clearance) rather than measured — verify against the physical body before cutting a customer order. `views` is intentionally empty; view artwork/panelMap compositing is a Phase 2 (renderer) concern, not needed for cut-file generation.",
+  "status": "draft"
+}

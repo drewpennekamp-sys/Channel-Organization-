@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "bodyId": "protoform-1567-00",
+  "name": "Bearcat Claw",
+  "palette": {
+    "base": { "name": "White", "hex": "#FFFFFF", "paintCode": "Tamiya PS-1" },
+    "c1": { "name": "Black", "hex": "#111111", "paintCode": "Tamiya PS-5" },
+    "c2": { "name": "Red", "hex": "#C8102E", "paintCode": "Tamiya PS-34" }
+  },
+  "paintOrder": ["c2", "c1", "base"],
+  "placements": [
+    {
+      "id": "p1",
+      "panel": "side-left",
+      "element": "slash-tear",
+      "colour": "c1",
+      "params": { "lengthMm": 110, "widthMm": 16, "jaggedness": 0.6, "seed": 4412 },
+      "xMm": 60,
+      "yMm": 56,
+      "rotationDeg": -8
+    },
+    {
+      "id": "p2",
+      "panel": "side-left",
+      "element": "slash-tear",
+      "colour": "c2",
+      "params": { "lengthMm": 90, "widthMm": 12, "jaggedness": 0.6, "seed": 88 },
+      "xMm": 175,
+      "yMm": 50,
+      "rotationDeg": -8
+    },
+    {
+      "id": "p3",
+      "panel": "side-left",
+      "element": "text-block",
+      "colour": "c1",
+      "params": { "text": "BEARCAT", "sizeMm": 20 },
+      "xMm": 230,
+      "yMm": 60,
+      "rotationDeg": 0
+    },
+    {
+      "id": "p4",
+      "panel": "hood",
+      "element": "chevron-arrow",
+      "colour": "c2",
+      "params": { "armLengthMm": 70, "angleDeg": 55, "thicknessMm": 10, "jagged": true, "seed": 3 },
+      "xMm": 60,
+      "yMm": 70,
+      "rotationDeg": 0
+    }
+  ],
+  "autoMirror": ["side-left→side-right"],
+  "rationale": "Claw slashes read as motion at speed; BEARCAT sits above the rear arch where curvature is lowest; a single chevron on the hood centreline keeps the front clean."
+}

@@ -1,39 +1,28 @@
 {
-  "name": "shorts-factory",
-  "version": "0.1.0",
+  "name": "livery-lab",
+  "version": "0.0.1",
   "private": true,
+  "description": "RC Livery Lab — AI livery designer and Cricut cut-file generator for 1/10 scale RC bodies.",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "seed": "tsx lib/db/seed.ts",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx scripts/migrate.ts",
-    "db:push": "drizzle-kit push",
-    "db:import-backup": "tsx scripts/import-backup.ts"
+    "build": "pnpm -r --filter=./packages/* build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "pnpm -r --filter=./packages/* typecheck",
+    "cut-test-sheet": "tsx scripts/cut-test-sheet.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.112.3",
-    "@neondatabase/serverless": "^1.1.0",
-    "drizzle-orm": "^0.45.2",
-    "framer-motion": "^11.5.4",
-    "jose": "^6.2.3",
-    "lucide-react": "^0.445.0",
-    "next": "14.2.35",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "zod": "^3.23.8"
+    "@livery-lab/bodies": "workspace:*",
+    "@livery-lab/elements": "workspace:*",
+    "@livery-lab/geometry": "workspace:*",
+    "@livery-lab/schema": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^20.14.2",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "autoprefixer": "^10.4.20",
-    "drizzle-kit": "^0.31.10",
-    "postcss": "^8.4.47",
-    "tailwindcss": "^3.4.13",
-    "tsx": "^4.19.1",
-    "typescript": "^5.5.4"
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -1,114 +1,65 @@
-# Shorts Factory
+# RC Livery Lab — Phase 1: the geometry engine
 
-Plan, generate, and post content across six YouTube Shorts channels split
-between two people — daily ideas, a video log with analytics, AI-driven
-insights that feed back into idea generation, and account-level settings.
+AI livery designer + automatic Cricut cut-file generator for 1/10 scale RC
+bodies. This repository currently implements **Phase 1 only**, per the
+build spec: the deterministic geometry engine, with no UI, database, or
+API route yet. Everything here is a pnpm monorepo of TypeScript packages,
+driven from the CLI / test suite.
 
-Runs on Next.js (App Router) + Postgres, deployed to Vercel, gated behind a
-shared password since it's a private two-person tool.
+See `docs/rc-livery-lab-build-spec.md` for the full multi-phase plan. The one-sentence version: an LLM emits a
+structured `DesignSpec` JSON (never raw SVG), and this engine turns that
+into cut-ready per-colour SVG, DXF, and a paint-order guide — the mockup
+you show a customer and the file you cut come from the same geometry, so
+they can't drift.
 
-## Stack
+## Packages
 
-- Next.js 14 (App Router, Route Handlers)
-- Postgres via [Neon](https://neon.tech) (serverless HTTP driver — no
-  connection pool to manage)
-- Drizzle ORM
-- Claude (Anthropic API) for channel analysis and idea generation
-- `jose` for session JWTs, checked in Next.js Middleware
+| Package | What it is |
+|---|---|
+| `packages/schema` | Zod schemas for the Body Template Format (BTF) and DesignSpec v1 — the two JSON contracts everything else is built on. |
+| `packages/bodies` | BTF loader + structural/semantic validator + panel-mirror resolution. |
+| `packages/elements` | The parametric element vocabulary the AI composes with — 6 generators in v1: `slash-tear`, `chevron-arrow`, `stripe-jagged`, `banner-curved`, `text-block`, `ribbon-awareness`. `text-block`/`banner-curved` convert glyphs to real paths via `opentype.js` — never `<text>`. |
+| `packages/geometry` | The 10-stage pipeline: resolve → transform → group-by-colour → boolean union (Clipper2/WASM) → validate (min-width, gap, margin, node-count) → auto-bridge floating islands → mirror-for-inside-Lexan → nest onto a 12×24in mat → registration marks → export (Cricut-safe SVG, DXF via maker.js, markdown spray guide). |
 
-## Environment variables
+`content/bodies/protoform-1567-00.btf.json` is the seed body — a
+PROTOform 1971 Camaro Z28 with **real measured overall dimensions** from
+the vendor spec sheet. Its per-panel outlines are still geometric
+approximations (see the `notes` field in that file) pending a physical
+trace, so it ships `status: "draft"`.
 
-Set these in **Vercel → Project → Settings → Environment Variables** for
-Production (and Preview, if you want preview deployments to work). Locally,
-put them in `.env.local` (already gitignored).
-
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | Yes | Postgres connection string from Neon (or Vercel Postgres). Use the pooled connection string Neon gives you — the app talks to it over Neon's serverless HTTP driver, which is stateless per query, so there's no pool to exhaust either way. |
-| `AUTH_PASSWORD` | Yes | The shared password both operators use to sign in. Pick something you'd be fine texting to the other person. |
-| `AUTH_SECRET` | Yes | Random secret used to sign session cookies. Generate one with `openssl rand -base64 32`. Changing it logs everyone out. |
-| `CRON_SECRET` | Yes (for auto-sync) | Random secret Vercel Cron sends as `Authorization: Bearer <value>` when it hits `/api/cron/sync`. Vercel automatically attaches this header for you once the env var exists — you don't wire that up yourself. Generate with `openssl rand -base64 32`. |
-| `ANTHROPIC_API_KEY` | Yes (for idea gen + analysis) | Claude API key. Without it, idea generation and channel analysis fail with a visible error/banner in the app rather than a silent failure — everything else still works. |
-| `VIDIQ_API_KEY` | No | vidIQ credentials for real stat syncing. The sync routes currently run as a stub (they stamp a "last synced" timestamp without pulling real data) until this integration is wired up to a live vidIQ call — see the `TODO(vidIQ sync)` comment in `lib/vidiq.ts`. |
-
-No secret is read anywhere in a `'use client'` file — `ANTHROPIC_API_KEY`,
-`VIDIQ_API_KEY`, `DATABASE_URL`, `AUTH_PASSWORD`, `AUTH_SECRET`, and
-`CRON_SECRET` are only ever touched from Route Handlers, Server Components,
-and `middleware.ts`, none of which ship their source to the browser. The
-Settings screen's "API keys" section shows only a masked tail
-(`••••ab12`), never the full value.
-
-## Local development
+## Getting started
 
 ```bash
-npm install
-cp .env.local.example .env.local   # fill in DATABASE_URL at minimum
-npm run db:push                    # sync schema to your Postgres DB
-npm run seed                       # optional: adds 3 example channels
-npm run dev
+pnpm install
+pnpm test          # full unit + integration + golden-file suite
+pnpm typecheck      # tsc --noEmit across every package
+pnpm cut-test-sheet  # emits output/cut-test-sheet.svg — 0.8/1.0/1.2/1.5/2.0mm
+                     # calibration bars; cut it on your actual Cricut to find
+                     # your machine's real minimum before trusting the
+                     # 1.2mm default in packages/geometry/src/validate.ts
 ```
 
-## Deploying to Vercel (first time)
+The best single demonstration of the whole pipeline is
+`packages/geometry/test/pipeline.test.ts`, which runs a real DesignSpec
+fixture (`packages/geometry/test/fixtures/camaro-bearcat-claw.json`)
+against the Camaro BTF and asserts:
 
-Do these in order:
+- no validation issues (min-width / gap / panel-margin / node-count / floating-island)
+- every exported SVG passes the full Cricut-safe checklist (§3.5 of the spec)
+- every exported DXF carries the right `MASK_<COLOUR>` + `REGISTRATION` layers
+- the spray guide's paint order is correct for inside-Lexan application
+  (first-sprayed = most visible; masks stay on until the very last detail
+  colour; the backing coat goes on unmasked, last)
+- golden-file snapshots of the actual cut geometry, so a refactor can't
+  silently change what gets cut (`packages/geometry/test/__snapshots__/`)
 
-1. **Create the Postgres database.** In Neon, create a project and copy the
-   pooled connection string it gives you — that's your `DATABASE_URL`.
+**Done when:** you cut `output/cut-test-sheet.svg` on your actual Cricut
+and it weeds cleanly — that's the real Phase 1 acceptance test, not
+anything in this repo.
 
-2. **Connect the repo to Vercel.** Import the repo in the Vercel dashboard
-   (or `vercel link` from the CLI). Don't deploy yet.
+## What's deliberately not here yet
 
-3. **Set environment variables** in Vercel → Settings → Environment
-   Variables: `DATABASE_URL`, `AUTH_PASSWORD`, `AUTH_SECRET`, `CRON_SECRET`,
-   `ANTHROPIC_API_KEY`, and `VIDIQ_API_KEY` if you have it. Use the table
-   above.
-
-4. **Run the schema migration against the new database**, from your machine,
-   pointed at the same `DATABASE_URL` you just set in Vercel:
-   ```bash
-   DATABASE_URL="<paste it>" npm run db:migrate
-   ```
-
-5. **Carry over any existing local data.** If you were running this locally
-   before (SQLite) or have a previous "Export all data" backup from the
-   Settings screen, load it into the new database once:
-   ```bash
-   DATABASE_URL="<paste it>" npm run db:import-backup -- path/to/backup.json
-   ```
-   If you're starting fresh, skip this and use `npm run seed` instead (also
-   pointed at the same `DATABASE_URL`), or just add channels once the app is
-   live.
-
-6. **Deploy** (push to the connected branch, or `vercel --prod`).
-
-7. **Verify the cron job is registered.** In Vercel → Project → Cron Jobs,
-   confirm `/api/cron/sync` is listed with the `0 13 * * *` (once daily)
-   schedule from `vercel.json` — the Hobby plan doesn't allow more frequent
-   cron jobs, which is why this isn't every few minutes. It no-ops until
-   `autoSyncEnabled` is turned on in Settings.
-
-8. **Sign in.** Visit the deployed URL — you'll land on `/login`. Use
-   `AUTH_PASSWORD`. Both operators use the same password; the You/Friend/All
-   switcher in the header is a view filter, unrelated to login.
-
-## Notes on the architecture
-
-- **Auth**: `middleware.ts` gates every route except `/login` and
-  `/api/auth/login` (and `/api/cron/*`, which uses its own `CRON_SECRET`
-  check instead of a session cookie, since Vercel Cron isn't a logged-in
-  browser). An unauthenticated request to any API route gets a `401`, not a
-  redirect — only page navigations redirect to `/login`.
-- **Background sync**: there's no always-on process on serverless, so the
-  old client-side polling interval is gone. Vercel Cron hits
-  `/api/cron/sync` once a day (the Hobby plan's cron frequency limit — Pro
-  allows more often, in which case you can tighten `vercel.json`'s
-  schedule); the route itself checks `settings.autoSyncEnabled` and a
-  stored last-sync timestamp against `settings.autoSyncIntervalMinutes`
-  before doing anything, so that setting can still space syncs out further
-  than daily if you want. The client-side poll that keeps the
-  Dashboard/Today screens fresh while you're actively looking at them is
-  unrelated and unchanged.
-- **Exports**: "Export today's prompts" and "Export all data" build their
-  file content in memory and stream it straight back in the HTTP response —
-  nothing is written to disk on the server, which matters on serverless
-  where the filesystem isn't persistent.
+No Next.js app, database, or API route — those are Phases 2-5 of the
+build spec (renderer + marketing site, AI composer, orders, polish).
+Nothing in `packages/*` depends on any of that; the geometry engine is a
+pure, framework-free TypeScript library on purpose.

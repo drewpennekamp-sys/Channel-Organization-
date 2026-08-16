@@ -52,7 +52,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   } catch (err: unknown) {
     console.error('[api/scan] Failed to save uploaded image(s):', err);
-    return NextResponse.json({ ok: false, error: 'Failed to save the uploaded photo(s).' }, { status: 500 });
+    // Surface the real message (e.g. "Blob storage isn't connected yet")
+    // rather than a generic one — there's no multi-tenant data to protect
+    // here, and the specific reason is what actually gets this fixed.
+    const message = err instanceof Error ? err.message : 'Failed to save the uploaded photo(s).';
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 
   const frontBase64 = await fileToBase64(frontFile);

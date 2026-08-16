@@ -39,6 +39,16 @@ export async function saveUploadedImage(file: File): Promise<string> {
     return blob.url;
   }
 
+  if (process.env.VERCEL) {
+    // Vercel's serverless functions have a read-only filesystem (aside
+    // from /tmp, which doesn't persist across requests) — falling through
+    // to the local-disk write below would fail anyway, with a far less
+    // useful error than this one. Fail fast with the actual fix.
+    throw new Error(
+      'Photo storage isn’t connected yet. In the Vercel project: Storage → Create → Blob → connect it to this project, then redeploy.',
+    );
+  }
+
   await mkdir(UPLOAD_DIR, { recursive: true });
   const buffer = Buffer.from(await file.arrayBuffer());
   await writeFile(path.join(UPLOAD_DIR, filename), buffer);

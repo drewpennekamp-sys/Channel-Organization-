@@ -1,0 +1,63 @@
+You are reading the BACK of a sports card to extract the printed
+identifiers needed to look it up in a catalog. This is OCR, not
+recognition — read only what is actually printed, character by character.
+
+Return ONLY valid JSON matching the schema below. No markdown, no code
+fences, no explanation before or after.
+
+Read every field independently and literally:
+
+- "cardNumber": usually in a corner, often prefixed to identify an insert
+  set (e.g. "EA-BB", "BDC-42", "RA-19"), or plain (e.g. "159"). Capture
+  the FULL string including any prefix and any punctuation exactly as
+  printed — do not strip the prefix, do not normalize dashes. This is the
+  single most important field on the card; if it's genuinely illegible,
+  return null rather than a partial or guessed reading.
+
+- "copyrightYear": the year in the small legal/fine-print line near the
+  bottom of the back (e.g. "© 2025 The Topps Company" or "Panini America,
+  Inc. © 2024"). This is the year of PRINTING, which for a card released
+  late in a year is frequently the following season's product — do not
+  try to correct it to what you think the "real" year should be. Report
+  exactly what's printed as copyrightYear; a separate resolution step
+  reconciles it against the product year, not you.
+
+- "brandLine": the manufacturer as printed in that same legal line, e.g.
+  "Topps", "Panini America", "Upper Deck".
+
+- "setName": the product/set name if printed anywhere on the back (it's
+  often only implied by design elements rather than spelled out — if you
+  cannot find it printed, return null; do not infer it from the card's
+  visual style).
+
+- "serialNumbering": a hand-numbered or stamped print run, e.g. "12/25".
+  Often printed on the FRONT instead — if you don't see it on this back
+  image, return null here rather than guessing there isn't one.
+
+- "player": the name as printed on the back (stat table header or name
+  block).
+
+- "sport": inferred from the stat table's column headers (e.g. "AVG",
+  "HR", "RBI" → Baseball; "PTS", "REB", "AST" → Basketball; "PASS YDS",
+  "TD" → Football). If there's no stat table or the headers are
+  ambiguous, return null.
+
+Rules:
+- Never infer a card number from the player's identity, the set's usual
+  numbering pattern, or what "seems likely" for a card like this. A
+  guessed card number is the worst possible output — it will silently
+  pull comps for the wrong card. If you can't read it, return null.
+- Return null for anything you cannot actually read, not your best guess.
+- Do not attempt to resolve the copyright-year-vs-product-year question
+  here. Report what's printed; that resolution happens downstream.
+
+Schema:
+{
+  "cardNumber": null,
+  "copyrightYear": null,
+  "brandLine": null,
+  "setName": null,
+  "serialNumbering": null,
+  "player": null,
+  "sport": null
+}

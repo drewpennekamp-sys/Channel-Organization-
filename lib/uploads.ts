@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { put } from '@vercel/blob';
-import type { SupportedImageMediaType } from '@/lib/vision/identifyCard';
+import type { SupportedImageMediaType } from '@/lib/scanner/types';
 
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
 

@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
-import { identifyCard, type SupportedImageMediaType } from '@/lib/vision/identifyCard';
+import { scanCard } from '@/lib/scanner/scanCard';
+import type { SupportedImageMediaType } from '@/lib/scanner/types';
 import { fileToBase64, isSupportedImageMediaType, saveUploadedImage } from '@/lib/uploads';
 
 /**
- * Accepts a front photo (required) and an optional back photo, runs Claude
- * vision, and returns structured attributes. Never writes to the database
- * — the card is only saved once the user confirms/corrects the result via
- * POST /api/cards. Uploaded photos are saved to disk regardless of whether
- * identification succeeds, so a failed scan still lets the user save the
- * photos alongside a manually-filled-in form.
+ * Runs the scanner pipeline (Pass 0-3, see lib/scanner/scanCard.ts) and
+ * returns its result. Never writes to the database — the card is only
+ * saved once the user confirms/corrects the result via POST /api/cards.
+ * Both photos are required: the pipeline's whole design (read the back's
+ * printed identifiers, resolve against the catalog, read the parallel off
+ * the front) depends on having both, so a front-only or back-only scan
+ * isn't supported.
  */
-// Safety margin for the vision call's higher effort/token budget — well
-// under any plan's function-timeout ceiling in practice.
 export const maxDuration = 60;
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -22,6 +22,12 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!(frontFile instanceof File) || frontFile.size === 0) {
     return NextResponse.json({ ok: false, error: 'A front photo is required.' }, { status: 400 });
   }
+  if (!(backFile instanceof File) || backFile.size === 0) {
+    return NextResponse.json(
+      { ok: false, error: 'A back photo is required — the scanner reads the card number and other identifiers off the back.' },
+      { status: 400 },
+    );
+  }
 
   const frontMediaType = frontFile.type;
   if (!isSupportedImageMediaType(frontMediaType)) {
@@ -30,58 +36,39 @@ export async function POST(request: Request): Promise<NextResponse> {
       { status: 400 },
     );
   }
-
-  let backImage: File | null = null;
-  let backMediaType: SupportedImageMediaType | undefined;
-  if (backFile instanceof File && backFile.size > 0) {
-    const candidateMediaType = backFile.type;
-    if (!isSupportedImageMediaType(candidateMediaType)) {
-      return NextResponse.json(
-        { ok: false, error: `Unsupported back image type: ${candidateMediaType || 'unknown'}` },
-        { status: 400 },
-      );
-    }
-    backImage = backFile;
-    backMediaType = candidateMediaType;
+  const backMediaType: string = backFile.type;
+  if (!isSupportedImageMediaType(backMediaType)) {
+    return NextResponse.json(
+      { ok: false, error: `Unsupported back image type: ${backMediaType || 'unknown'}` },
+      { status: 400 },
+    );
   }
 
-  // Save the photo(s) first so the client still has a usable path even if
-  // identification below fails — a failed scan shouldn't lose the photos.
+  // Save the photos first so the client still has usable paths even if
+  // the pipeline below fails — a failed scan shouldn't lose the photos.
   let frontImagePath: string;
-  let backImagePath: string | null = null;
+  let backImagePath: string;
   try {
     frontImagePath = await saveUploadedImage(frontFile);
-    if (backImage) {
-      backImagePath = await saveUploadedImage(backImage);
-    }
+    backImagePath = await saveUploadedImage(backFile);
   } catch (err: unknown) {
     console.error('[api/scan] Failed to save uploaded image(s):', err);
-    // Surface the real message (e.g. "Blob storage isn't connected yet")
-    // rather than a generic one — there's no multi-tenant data to protect
-    // here, and the specific reason is what actually gets this fixed.
     const message = err instanceof Error ? err.message : 'Failed to save the uploaded photo(s).';
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 
   const frontBase64 = await fileToBase64(frontFile);
-  const backBase64 = backImage ? await fileToBase64(backImage) : undefined;
+  const backBase64 = await fileToBase64(backFile);
 
-  const attributes = await identifyCard(
-    { base64: frontBase64, mediaType: frontMediaType },
-    backBase64 && backMediaType ? { base64: backBase64, mediaType: backMediaType } : undefined,
-  );
-
-  if (!attributes) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: 'Could not read the card from that photo. Enter the details manually below.',
-        frontImagePath,
-        backImagePath,
-      },
-      { status: 200 },
+  try {
+    const result = await scanCard(
+      { base64: frontBase64, mediaType: frontMediaType as SupportedImageMediaType },
+      { base64: backBase64, mediaType: backMediaType as SupportedImageMediaType },
     );
+    return NextResponse.json({ ok: true, result, frontImagePath, backImagePath });
+  } catch (err: unknown) {
+    console.error('[api/scan] Scanner pipeline failed:', err);
+    const message = err instanceof Error ? err.message : 'Scan failed.';
+    return NextResponse.json({ ok: false, error: message, frontImagePath, backImagePath }, { status: 200 });
   }
-
-  return NextResponse.json({ ok: true, attributes, frontImagePath, backImagePath });
 }

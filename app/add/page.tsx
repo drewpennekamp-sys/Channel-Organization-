@@ -1,30 +1,15 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
-
-interface ScanAttributes {
-  year: number | null;
-  brand: string | null;
-  set: string | null;
-  subset: string | null;
-  player: string | null;
-  cardNumber: string | null;
-  parallel: string | null;
-  serialNumbering: string | null;
-  isAuto: boolean | null;
-  isRelic: boolean | null;
-  sport: string | null;
-  grade: string | null;
-  certNumber: string | null;
-  confidence: 'high' | 'medium' | 'low';
-}
+import { processCapture } from '@/lib/capture/imageChecks';
+import type { ScanResult } from '@/lib/scanner/types';
 
 interface ScanResponse {
   ok: boolean;
   error?: string;
-  attributes?: ScanAttributes;
+  result?: ScanResult;
   frontImagePath?: string | null;
   backImagePath?: string | null;
 }
@@ -67,94 +52,174 @@ const EMPTY_FORM: FormState = {
   notes: '',
 };
 
-const CONFIDENCE_STYLES: Record<ScanAttributes['confidence'], string> = {
-  high: 'bg-green-100 text-green-800',
-  medium: 'bg-amber-100 text-amber-800',
-  low: 'bg-red-100 text-red-800',
+const CONFIDENCE_LABEL: Record<NonNullable<ScanResult['confidence']>, string> = {
+  exact: 'Exact match (cert)',
+  high: 'High confidence',
+  low: 'Parallel uncertain',
+  unresolved: 'Not in catalog — check every field',
 };
+
+const CONFIDENCE_STYLE: Record<NonNullable<ScanResult['confidence']>, string> = {
+  exact: 'bg-green-100 text-green-800',
+  high: 'bg-green-100 text-green-800',
+  low: 'bg-blue-100 text-blue-800',
+  unresolved: 'bg-amber-100 text-amber-800',
+};
+
+const inputClass =
+  'rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring';
+// "Spot blue" — the one highlight color for anything the scanner couldn't
+// confirm, so it's visually distinct from a normal field without reading
+// as an error.
+const uncertainInputClass =
+  'rounded-md border-2 border-blue-400 bg-blue-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400';
 
 function PhotoPicker({
   label,
-  file,
-  onChange,
+  checkGlare,
+  onProcessed,
 }: {
   label: string;
-  file: File | null;
-  onChange: (file: File | null) => void;
+  checkGlare: boolean;
+  onProcessed: (file: File | null, previewUrl: string | null) => void;
 }) {
-  const previewUrl = file ? URL.createObjectURL(file) : null;
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [reasons, setReasons] = useState<string[]>([]);
+  const [accepted, setAccepted] = useState(false);
+
+  async function handleFile(raw: File | undefined) {
+    if (!raw) return;
+    setChecking(true);
+    setReasons([]);
+    setAccepted(false);
+    onProcessed(null, null);
+    try {
+      const result = await processCapture(raw, { checkGlare });
+      const url = URL.createObjectURL(result.processedBlob);
+      setPreviewUrl(url);
+      if (!result.ok) {
+        setReasons(result.reasons);
+        return;
+      }
+      const processed = new File([result.processedBlob], `${label.toLowerCase()}.jpg`, { type: 'image/jpeg' });
+      setAccepted(true);
+      onProcessed(processed, url);
+    } catch (err: unknown) {
+      console.error('Capture check failed:', err);
+      setReasons(['Could not process that photo — try again.']);
+    } finally {
+      setChecking(false);
+    }
+  }
 
   return (
-    <label className="flex flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-secondary/40 p-4 text-center hover:bg-secondary">
-      {previewUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={previewUrl} alt={`${label} preview`} className="h-32 w-auto rounded-md object-contain" />
-      ) : (
-        <span className="text-3xl">📷</span>
+    <div className="flex-1">
+      <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-secondary/40 p-4 text-center hover:bg-secondary">
+        {previewUrl ? (
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={previewUrl} alt={`${label} preview`} className="h-32 w-auto rounded-md object-contain" />
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="aspect-[2.5/3.5] h-[88%] rounded border-2 border-dashed border-blue-400/60" />
+            </div>
+          </div>
+        ) : (
+          <span className="text-3xl">📷</span>
+        )}
+        <span className="text-sm font-medium">{checking ? 'Checking photo…' : label}</span>
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            void handleFile(f);
+          }}
+        />
+      </label>
+      {reasons.length > 0 && (
+        <div className="mt-1.5 rounded-md bg-red-50 p-2 text-xs text-red-700">
+          {reasons.map((r) => (
+            <p key={r}>{r}</p>
+          ))}
+          <p className="mt-1 font-medium">Tap the box above to retake.</p>
+        </div>
       )}
-      <span className="text-sm font-medium">{label}</span>
-      <input
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-      />
-    </label>
+      {accepted && <p className="mt-1.5 text-xs text-green-700">✓ Looks good</p>}
+    </div>
   );
 }
 
 function Field({
   label,
+  uncertain,
   children,
 }: {
   label: string;
+  uncertain?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
-      <span className="font-medium text-muted-foreground">{label}</span>
+      <span className="font-medium text-muted-foreground">
+        {label}
+        {uncertain && <span className="ml-1.5 text-[11px] font-normal text-blue-600">unconfirmed</span>}
+      </span>
       {children}
     </label>
   );
 }
-
-const inputClass =
-  'rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring';
 
 export default function AddCardPage() {
   const router = useRouter();
 
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
+  const [frontPreview, setFrontPreview] = useState<string | null>(null);
+  const [backPreview, setBackPreview] = useState<string | null>(null);
+
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
-  const [confidence, setConfidence] = useState<ScanAttributes['confidence'] | null>(null);
   const [hasScanned, setHasScanned] = useState(false);
+  const [scanMeta, setScanMeta] = useState<{
+    confidence: ScanResult['confidence'];
+    method: ScanResult['method'];
+    parallelCandidates: string[];
+  } | null>(null);
 
   const [imagePaths, setImagePaths] = useState<{ front: string | null; back: string | null }>({
     front: null,
     back: null,
   });
+  const [rawCopyrightYear, setRawCopyrightYear] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [parallelConfirmed, setParallelConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  const uncertainFieldsUnresolved = scanMeta?.confidence === 'unresolved';
+  const parallelUncertain = scanMeta?.confidence === 'low';
+
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+    if (key === 'parallel') setParallelConfirmed(false);
   }
 
   async function handleScan() {
-    if (!frontFile) {
-      setScanError('Add a front photo first.');
+    if (!frontFile || !backFile) {
+      setScanError('Both front and back photos are required.');
       return;
     }
     setScanning(true);
     setScanError(null);
+    setParallelConfirmed(false);
     try {
       const body = new FormData();
       body.append('front', frontFile);
-      if (backFile) body.append('back', backFile);
+      body.append('back', backFile);
 
       const res = await fetch('/api/scan', { method: 'POST', body });
       const data = (await res.json()) as ScanResponse;
@@ -162,28 +227,31 @@ export default function AddCardPage() {
       setImagePaths({ front: data.frontImagePath ?? null, back: data.backImagePath ?? null });
       setHasScanned(true);
 
-      if (!res.ok || !data.ok || !data.attributes) {
+      if (!res.ok || !data.ok || !data.result) {
         setScanError(data.error ?? 'Scan failed. Enter the card details manually below.');
         return;
       }
 
-      const attrs = data.attributes;
-      setConfidence(attrs.confidence);
+      const r = data.result;
+      setScanMeta({ confidence: r.confidence, method: r.method, parallelCandidates: r.parallelCandidates });
+      setRawCopyrightYear(r.rawCopyrightYear);
+
+      const isUnresolved = r.confidence === 'unresolved';
       setForm((prev) => ({
         ...prev,
-        year: attrs.year != null ? String(attrs.year) : '',
-        brand: attrs.brand ?? '',
-        set: attrs.set ?? '',
-        subset: attrs.subset ?? '',
-        player: attrs.player ?? '',
-        cardNumber: attrs.cardNumber ?? '',
-        parallel: attrs.parallel ?? '',
-        serialNumbering: attrs.serialNumbering ?? '',
-        isAuto: attrs.isAuto ?? false,
-        isRelic: attrs.isRelic ?? false,
-        sport: attrs.sport ?? '',
-        grade: attrs.grade ?? prev.grade,
-        certNumber: attrs.certNumber ?? '',
+        year: r.year != null ? String(r.year) : isUnresolved && r.rawCopyrightYear != null ? String(r.rawCopyrightYear) : '',
+        brand: r.brand ?? (isUnresolved ? r.rawBrandLine ?? '' : ''),
+        set: r.set ?? (isUnresolved ? r.rawSetName ?? '' : ''),
+        subset: r.subset ?? '',
+        player: r.player ?? '',
+        cardNumber: r.cardNumber ?? '',
+        parallel: r.parallel ?? '',
+        serialNumbering: r.serialNumbering ?? '',
+        isAuto: r.isAuto ?? false,
+        isRelic: r.isRelic ?? false,
+        sport: r.sport ?? '',
+        grade: r.grade ?? prev.grade,
+        certNumber: r.certNumber ?? '',
       }));
     } catch (err: unknown) {
       console.error('Scan request failed:', err);
@@ -193,9 +261,15 @@ export default function AddCardPage() {
     }
   }
 
+  const parallelConfirmRequired = hasScanned && !scanError;
+
   async function handleSave() {
     if (!form.player.trim() || !form.year.trim() || !form.grade.trim()) {
       setSaveError('Player, year, and grade are required.');
+      return;
+    }
+    if (parallelConfirmRequired && !parallelConfirmed) {
+      setSaveError('Check the parallel against the photo and confirm it below before saving.');
       return;
     }
     setSaving(true);
@@ -223,6 +297,9 @@ export default function AddCardPage() {
           notes: form.notes || null,
           frontImagePath: imagePaths.front,
           backImagePath: imagePaths.back,
+          identificationConfidence: scanMeta?.confidence ?? null,
+          identificationMethod: scanMeta?.method ?? null,
+          copyrightYear: rawCopyrightYear,
         }),
       });
 
@@ -232,7 +309,7 @@ export default function AddCardPage() {
         return;
       }
 
-      router.push('/');
+      router.push('/collection');
       router.refresh();
     } catch (err: unknown) {
       console.error('Save request failed:', err);
@@ -242,23 +319,43 @@ export default function AddCardPage() {
     }
   }
 
+  const thumbnails = useMemo(
+    () => [frontPreview, backPreview].filter((u): u is string => Boolean(u)),
+    [frontPreview, backPreview],
+  );
+
   return (
     <main className="container max-w-2xl py-8">
       <h1 className="mb-1 text-2xl font-semibold">Add a card</h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        Take a photo of the front (and back, if you have it) and Claude will fill in the details below. You
-        confirm or correct everything before it&rsquo;s saved — nothing is added to your collection automatically.
+        Photograph the front and back — the scanner reads the identifiers off the back, resolves the card against
+        your catalog, and reads the parallel off the front. You confirm or correct everything before it&rsquo;s
+        saved.
       </p>
 
       <div className="mb-4 flex gap-4">
-        <PhotoPicker label="Front (required)" file={frontFile} onChange={setFrontFile} />
-        <PhotoPicker label="Back (optional)" file={backFile} onChange={setBackFile} />
+        <PhotoPicker
+          label="Front (required)"
+          checkGlare
+          onProcessed={(file, url) => {
+            setFrontFile(file);
+            setFrontPreview(url);
+          }}
+        />
+        <PhotoPicker
+          label="Back (required)"
+          checkGlare={false}
+          onProcessed={(file, url) => {
+            setBackFile(file);
+            setBackPreview(url);
+          }}
+        />
       </div>
 
       <button
         type="button"
         onClick={handleScan}
-        disabled={scanning || !frontFile}
+        disabled={scanning || !frontFile || !backFile}
         className="mb-2 w-full rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
       >
         {scanning ? 'Scanning…' : hasScanned ? 'Re-scan' : 'Scan card'}
@@ -266,14 +363,27 @@ export default function AddCardPage() {
 
       {scanError && <p className="mb-4 text-sm text-destructive">{scanError}</p>}
 
-      {confidence && (
-        <div className="mb-4 flex items-center gap-2">
-          <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', CONFIDENCE_STYLES[confidence])}>
-            {confidence} confidence
+      {scanMeta && (
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', CONFIDENCE_STYLE[scanMeta.confidence])}>
+            {CONFIDENCE_LABEL[scanMeta.confidence]}
           </span>
-          {confidence === 'low' && (
-            <span className="text-xs text-muted-foreground">Double-check every field below before saving.</span>
-          )}
+          <span className="text-[11px] text-muted-foreground">via {scanMeta.method}</span>
+        </div>
+      )}
+
+      {hasScanned && !scanError && (
+        <p className="mb-4 text-sm font-medium text-foreground">
+          Check this before saving. A wrong parallel pulls the wrong comps.
+        </p>
+      )}
+
+      {thumbnails.length > 0 && (
+        <div className="mb-4 flex gap-3">
+          {thumbnails.map((url) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={url} src={url} alt="" className="h-20 w-auto rounded-md border border-border object-contain" />
+          ))}
         </div>
       )}
 
@@ -284,47 +394,52 @@ export default function AddCardPage() {
           void handleSave();
         }}
       >
-        <Field label="Year">
+        <Field label="Year" uncertain={uncertainFieldsUnresolved}>
           <input
-            className={inputClass}
+            className={uncertainFieldsUnresolved ? uncertainInputClass : inputClass}
             type="number"
             value={form.year}
             onChange={(e) => setField('year', e.target.value)}
             required
           />
         </Field>
-        <Field label="Sport">
-          <input className={inputClass} value={form.sport} onChange={(e) => setField('sport', e.target.value)} />
+        <Field label="Sport" uncertain={uncertainFieldsUnresolved}>
+          <input
+            className={uncertainFieldsUnresolved ? uncertainInputClass : inputClass}
+            value={form.sport}
+            onChange={(e) => setField('sport', e.target.value)}
+          />
         </Field>
-        <Field label="Brand">
-          <input className={inputClass} value={form.brand} onChange={(e) => setField('brand', e.target.value)} />
+        <Field label="Brand" uncertain={uncertainFieldsUnresolved}>
+          <input
+            className={uncertainFieldsUnresolved ? uncertainInputClass : inputClass}
+            value={form.brand}
+            onChange={(e) => setField('brand', e.target.value)}
+          />
         </Field>
-        <Field label="Set">
-          <input className={inputClass} value={form.set} onChange={(e) => setField('set', e.target.value)} />
+        <Field label="Set" uncertain={uncertainFieldsUnresolved}>
+          <input
+            className={uncertainFieldsUnresolved ? uncertainInputClass : inputClass}
+            value={form.set}
+            onChange={(e) => setField('set', e.target.value)}
+          />
         </Field>
         <Field label="Subset">
           <input className={inputClass} value={form.subset} onChange={(e) => setField('subset', e.target.value)} />
         </Field>
-        <Field label="Player">
+        <Field label="Player" uncertain={uncertainFieldsUnresolved}>
           <input
-            className={inputClass}
+            className={uncertainFieldsUnresolved ? uncertainInputClass : inputClass}
             value={form.player}
             onChange={(e) => setField('player', e.target.value)}
             required
           />
         </Field>
-        <Field label="Card #">
+        <Field label="Card #" uncertain={uncertainFieldsUnresolved}>
           <input
-            className={inputClass}
+            className={uncertainFieldsUnresolved ? uncertainInputClass : inputClass}
             value={form.cardNumber}
             onChange={(e) => setField('cardNumber', e.target.value)}
-          />
-        </Field>
-        <Field label="Parallel">
-          <input
-            className={inputClass}
-            value={form.parallel}
-            onChange={(e) => setField('parallel', e.target.value)}
           />
         </Field>
         <Field label="Serial #">
@@ -378,6 +493,40 @@ export default function AddCardPage() {
             Relic
           </label>
         </div>
+
+        {/* Parallel is always its own block, separate from the grid above — it's the field that most changes value, so it always needs an explicit tap regardless of confidence. */}
+        <div className="col-span-2 rounded-md border border-border bg-secondary/30 p-3">
+          <Field label="Parallel" uncertain={parallelUncertain}>
+            <input
+              className={parallelUncertain ? uncertainInputClass : inputClass}
+              value={form.parallel}
+              onChange={(e) => setField('parallel', e.target.value)}
+              placeholder="Base, Refractor, Gold /50, ..."
+              list={scanMeta && scanMeta.parallelCandidates.length > 0 ? 'parallel-candidates' : undefined}
+            />
+            {scanMeta && scanMeta.parallelCandidates.length > 0 && (
+              <datalist id="parallel-candidates">
+                {scanMeta.parallelCandidates.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+            )}
+          </Field>
+          {scanMeta && scanMeta.parallelCandidates.length > 0 && (
+            <p className="mt-1 text-xs text-blue-700">Couldn&rsquo;t narrow it down — candidates: {scanMeta.parallelCandidates.join(', ')}</p>
+          )}
+          {parallelConfirmRequired && (
+            <label className="mt-2 flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={parallelConfirmed}
+                onChange={(e) => setParallelConfirmed(e.target.checked)}
+              />
+              I checked the parallel against the photo
+            </label>
+          )}
+        </div>
+
         <div className="col-span-2 flex flex-col gap-1 text-sm">
           <span className="font-medium text-muted-foreground">Notes</span>
           <textarea

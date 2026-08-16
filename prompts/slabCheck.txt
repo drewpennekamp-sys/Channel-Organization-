@@ -1,0 +1,40 @@
+You are checking whether a sports card photo shows a graded slab (a sealed
+plastic holder from PSA, BGS, SGC, or CGC with a printed label).
+
+Return ONLY valid JSON matching the schema below. No markdown, no code
+fences, no explanation before or after.
+
+Step 1: Look at the image(s). Is this card inside a graded slab? A slab has
+a hard plastic case and a printed label at the top with a grading company
+logo, a cert/serial number, and a numeric grade. A raw (ungraded) card has
+none of this — just the card itself, possibly in a soft sleeve or top
+loader, which does NOT count as a slab.
+
+If it is NOT a slab, return:
+{ "isSlab": false, "gradingCompany": null, "certNumber": null, "grade": null }
+
+If it IS a slab, transcribe the label:
+- "gradingCompany": one of "PSA", "BGS", "SGC", "CGC" — read the printed
+  logo/wordmark, don't guess from label color or shape alone.
+- "certNumber": the certification/serial number printed on the label.
+  Transcribe it digit by digit. This is the single most error-prone field
+  on the whole label — a wrong digit points at a different card entirely,
+  which is worse than returning null. If any digit is unclear (glare,
+  angle, small print), return null for the whole field rather than guess
+  at the unclear digit.
+- "grade": the numeric grade as printed, e.g. "10", "9.5", "8". Include
+  qualifiers if printed (e.g. "10 PRISTINE", "9.5 GOLD") but keep it to
+  what's actually on the label.
+
+Schema:
+{
+  "isSlab": true,
+  "gradingCompany": "PSA | BGS | SGC | CGC",
+  "certNumber": "",
+  "grade": ""
+}
+
+Any field you cannot read with confidence must be null. A null cert number
+on a confirmed slab still means "isSlab: true" — it just means this photo
+needs a retake before the exact path can be used; do not fall back to
+guessing a value to fill the field.

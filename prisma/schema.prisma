@@ -83,12 +83,97 @@ model CopyOwned {
 
   notes String?
 
+  /// How this copy's identity was determined by the scanner (see
+  /// lib/scanner/) — "exact" (cert), "high" (catalog match, closed-list
+  /// parallel), "low" (catalog matched, parallel uncertain), "unresolved"
+  /// (manual entry), or null for copies added before the scanner existed /
+  /// entered by hand without ever running a scan. Never a numeric score —
+  /// see lib/scanner/types.ts for why.
+  identificationConfidence String?
+
+  /// Which resolution rule produced identificationConfidence — "cert",
+  /// "catalog-exact", "catalog-year-offset", "catalog-prefix", or
+  /// "unresolved". Logged so it's visible which rule is doing the work.
+  identificationMethod String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   valuations Valuation[]
 
   @@index([cardId])
+}
+
+/// Reference knowledge about one (set, cardNumber) pair — what Pass 2 of
+/// the scanner resolves against. Deliberately NOT bulk-seeded from an
+/// external export: it grows from confirmed scans instead (see
+/// app/api/cards/route.ts), so day one has zero coverage and every
+/// confirmed high-confidence save teaches the catalog one more card. A
+/// CatalogCard is reference data, independent of how many Card/CopyOwned
+/// rows end up pointing at it.
+model CatalogCard {
+  id String @id @default(cuid())
+
+  brand  String
+  year   Int
+  set    String
+  subset String @default("")
+
+  /// Full string including any insert prefix, e.g. "EA-BB", never stripped.
+  cardNumber String
+  /// The prefix portion only (e.g. "EA-BB" -> "EA"), extracted at write
+  /// time — Pass 2's prefix-match resolution rule filters on this.
+  cardNumberPrefix String @default("")
+
+  player String
+  sport  String
+
+  isAuto  Boolean @default(false)
+  isRelic Boolean @default(false)
+
+  /// The copyright year actually observed on a confirmed scan of this
+  /// card — distinct from `year` (the product/season year) because a
+  /// late-year release prints next season's copyright. Nullable: not
+  /// every confirmed scan has a back photo with a legible copyright line.
+  copyrightYear Int?
+
+  parallels CatalogParallel[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([brand, year, set, subset, cardNumber], name: "catalogIdentity")
+  @@index([cardNumber, player])
+  @@index([cardNumberPrefix, player])
+}
+
+/// One known parallel/insert-color variant of a CatalogCard, in rarity
+/// order — the closed list Pass 3 must choose from. Grows the same way
+/// CatalogCard does: a confirmed scan of a parallel not yet on record adds
+/// it here.
+model CatalogParallel {
+  id String @id @default(cuid())
+
+  catalogCardId String
+  catalogCard   CatalogCard @relation(fields: [catalogCardId], references: [id], onDelete: Cascade)
+
+  /// Display name, e.g. "Green", "Gold", "SuperFractor" — "Base" for the
+  /// unparalleled version, always present as the first row for a card.
+  name String
+
+  /// The serial print run (e.g. 99 for "/99"), null for Base/unnumbered
+  /// parallels and for true 1/1s (see oneOfOne).
+  printRun Int?
+  oneOfOne Boolean @default(false)
+
+  /// Sort position, rarest last — the order the closed-list prompt shows
+  /// candidates in and the order ties get broken in.
+  rarityOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([catalogCardId, name])
+  @@index([catalogCardId, printRun])
 }
 
 /// One observed SOLD listing for a Card+grade. Append-only: rows are never

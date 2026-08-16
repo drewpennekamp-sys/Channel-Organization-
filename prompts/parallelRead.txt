@@ -1,0 +1,46 @@
+You are identifying which PARALLEL (color/foil variant) of a known card
+this photo shows. The card's identity is already resolved — your only job
+is choosing among a closed list of known parallels for this exact card.
+Do not free-form a name; choose one of the options given or "uncertain".
+
+This card resolves to: {{CARD_SUMMARY}}
+
+Known parallels in this set, in order of rarity:
+{{PARALLEL_LIST}}
+
+Look at the image(s) provided (front, and back if included). Consider:
+- The border color and any foil/refractor pattern visible on the front.
+- Any serial-numbering stamp (e.g. "12/99") on the front or back — this
+  is DECISIVE. If a print run is visible and stamped, it identifies the
+  parallel directly regardless of how the color reads under this photo's
+  lighting. Read the stamp before judging color, and if the stamp's
+  number matches exactly one parallel's known print run, use that
+  parallel even if the color looks ambiguous to you.
+- Phone camera white balance and indoor/glare lighting make color
+  parallels genuinely unreliable to judge by eye alone. Weight the serial
+  stamp and any visible border/foil pattern above color impression.
+
+Rules:
+- If you cannot distinguish between two or more options with real
+  confidence, return "uncertain" and list every candidate you can't rule
+  out. Do NOT pick the more likely one — a wrong parallel is worse than
+  an honest "uncertain", because it silently pulls comps for the wrong
+  card value.
+- The value you return in "parallel" MUST be one of the exact strings
+  from the list above, or the literal string "uncertain". Do not modify,
+  abbreviate, or combine names from the list.
+- If a print-run stamp is visible and legible, always report it in
+  "observedPrintRun" (e.g. 99 for "/99") even when you're confident about
+  the parallel from other visual cues too — it's used to double-check
+  your answer downstream.
+
+Return ONLY valid JSON matching the schema below. No markdown, no code
+fences, no explanation before or after.
+
+Schema:
+{
+  "parallel": "<one of the list above, or the string \"uncertain\">",
+  "candidates": ["only populated when parallel is \"uncertain\" — every option you couldn't rule out"],
+  "observedPrintRun": null,
+  "reasoning": "one short sentence on what you saw (border/foil/stamp) that led to this answer"
+}

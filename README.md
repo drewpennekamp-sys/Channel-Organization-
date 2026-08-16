@@ -84,6 +84,7 @@ full model; the tables are:
 | `CopyOwned` | A physical copy I own, in a specific grade |
 | `Sale` | One observed SOLD listing — **append-only**, never updated or deleted |
 | `Valuation` | A computed estimate snapshot, with the exact `Sale` rows that produced it |
+| `CatalogCard` / `CatalogParallel` | The scanner's reference data — what `(set, cardNumber)` resolves to and its known parallels. Not bulk-seeded; grows from confirmed scans — see "Adding a card from photos" |
 
 Every `Valuation` records which `Sale` rows it was computed from
 (`ValuationSaleUsed`), so any past estimate is reproducible from the data
@@ -164,31 +165,97 @@ accumulate. A single click on a thin-market card may correctly report
 `sufficient: false` — that's not a bug, click again later or after the CLI
 has run a deeper search.
 
-## Adding a card from photos
+## Adding a card from photos — the scanner
 
-`/add` lets you skip typing entirely: take (or upload) a photo of the card
-front, optionally the back, and Claude vision (`claude-sonnet-5`, high
-effort) fills in year/brand/set/player/card number/parallel/grade/etc.
-The prompt runs a literal-transcription pass before mapping fields — read
-every visible character first, then fill the schema from that — rather
-than pattern-matching from what a similar card "usually" has; it also
-distinguishes a real ink/sticker autograph from a printed facsimile
-signature, and prefers the back for card number/year when both photos are
-given. It's still a vision model reading a photo, not a database lookup —
-low confidence + null fields is the honest fallback when a photo is
-blurry, cropped, or the back wasn't included, exactly like `AgentSource`
-never fabricates a sale. **Nothing is written to the database until you
-hit "Save to collection"** — a scan only ever returns JSON to the page.
+`/add` requires both a front and back photo and runs them through
+`lib/scanner/scanCard.ts`, a 4-pass pipeline built around one idea: a
+card's `(set, cardNumber)` is effectively a primary key and is printed in
+plain text on the back, so identification is mostly OCR + catalog lookup,
+not open-ended image recognition — with one genuinely hard step (the
+parallel) isolated and defended instead of guessed.
 
-- `POST /api/scan` — front (required) + back (optional) photo → structured
-  attributes. Saves the photos (Vercel Blob in production, `public/uploads/`
-  locally) either way, so a failed scan doesn't lose them.
-- `POST /api/cards` — the confirmed/edited form → creates (or reuses, via
-  the `Card` identity constraint) the `Card` row and a `CopyOwned` row.
-- `/` (Collection) lists everything saved so far.
+1. **Slab check** — if the photo shows a graded PSA/BGS/SGC/CGC slab, OCR
+   the cert number + grade and return immediately with `confidence: exact`.
+   A cert number is an exact key; nothing else needs to run.
+2. **Back read** (`lib/scanner/backRead.ts`) — OCR the identifiers off the
+   back: card number (full string, prefix included, never stripped),
+   copyright year, brand, set, serial numbering, player, sport. Never
+   infers a card number from the player's identity — a guessed number is
+   the single worst output this system can produce, so it's null instead.
+3. **Catalog resolution** (`lib/scanner/catalogResolve.ts`) — pure,
+   deterministic code, no model call: exact (brand, year, set, cardNumber)
+   match, then (cardNumber, player, year±1) to absorb the late-release
+   copyright-year offset, then (cardNumberPrefix, player) to pin an insert
+   set. First rule to find a unique match wins; logged either way.
+4. **Parallel read** (`lib/scanner/parallelRead.ts`) — the hard, honest
+   step. The model picks from the resolved card's *known* parallels (a
+   closed list) or says "uncertain" — never free-form. A response outside
+   the list is treated as uncertain rather than trusted. Skipped entirely
+   when a serial-numbering stamp already pins the parallel deterministically
+   (see below).
 
-On a phone, `<input type="file" capture="environment">` opens the camera
-directly.
+**The catalog isn't bulk-seeded.** `CatalogCard`/`CatalogParallel` start
+empty and grow one entry at a time from every confirmed save — scanned or
+hand-typed (`lib/scanner/growCatalog.ts`, called from `POST /api/cards`).
+The first scan of a new set is expected to come back `unresolved`; every
+save after that teaches the catalog, so accuracy improves the more you use
+it rather than depending on a one-time data import.
+
+**Confidence is one of four levels, never a percentage** (false precision
+you'd learn to ignore): `exact` (cert), `high` (catalog match + closed-list
+parallel), `low` (catalog matched, parallel uncertain — candidates shown),
+`unresolved` (no catalog match — raw OCR fields kept as a starting point,
+nothing guessed). Stored on `CopyOwned.identificationConfidence` /
+`.identificationMethod`. The confirm form highlights whatever's uncertain
+in spot blue, and the parallel field always needs an explicit tap to
+confirm — even at `high` confidence — because it's the field that most
+changes value.
+
+A serial-number stamp (e.g. "12/99") is treated as decisive on its own:
+if Pass 1 read one and exactly one of the catalog's known parallels for
+that card carries that print run, the parallel is resolved in code with
+zero model calls — no need to ask a model to judge color under uncertain
+phone-camera lighting for the one case a printed number already settles.
+
+**Capture requirements**, enforced client-side before a photo ever
+uploads (`lib/capture/imageChecks.ts`, canvas-based, no server round
+trip): blur rejection (Laplacian variance), glare rejection on the front
+(brightness histogram — chrome cards blow out under direct light and
+glare is the top cause of parallel misreads), a rough card-fills-the-frame
+check (edge-density bounding box, not true segmentation), auto-rotate to
+portrait, best-effort deskew past ~5° (gradient-angle histogram, not a
+full Hough line fit), and downscaling to 1600px before upload. These are
+honest heuristics, not real computer vision — see the module's doc comment
+for exactly what they do and don't catch.
+
+Nothing is written to the database until you hit **Save to collection**.
+Every scan pass's raw model output is logged alongside its parsed result
+(`logs/scans.jsonl`, gitignored) and every API call's token cost is logged
+too (`logs/usage.jsonl`) — so a wrong field is diagnosable (model misread
+vs. parser bug) and cost is visible without the Anthropic console.
+
+- `POST /api/scan` — front + back (both required) → a `ScanResult`. Saves
+  the photos (Vercel Blob in production, `public/uploads/` locally)
+  regardless of scan outcome, so a failed scan doesn't lose them.
+- `POST /api/cards` — the confirmed/edited form → creates (or reuses) the
+  `Card` row and a `CopyOwned` row, and grows the catalog.
+- `/collection` lists everything saved so far.
+
+Prompts live as plain text under `prompts/` (`slabCheck.txt`,
+`backRead.txt`, `parallelRead.txt`), not inline string literals, so
+they're diffable independent of the TypeScript around them.
+
+`lib/scanner/scanCard.test.ts` and `lib/scanner/catalogResolve.test.ts`
+are a mocked regression suite — no real photos, no live API calls; each
+fixture stubs what a pass's model call would return and asserts on the
+deterministic logic downstream (confidence level *and* field values, per
+card: slab, clean base card, prefixed insert, copyright-year offset, two
+parallels that must not conflate, a serial stamp as the only tell, an
+off-list model response, and a vintage card with no card number that must
+come back `unresolved` rather than guessed). `lib/capture/imageChecks.test.ts`
+validates the blur/glare/coverage math directly on synthetic pixel data,
+since the full canvas pipeline needs a real browser this test environment
+doesn't have.
 
 ## Deploy
 
@@ -241,9 +308,11 @@ built so far (API routes, DB, auth-free design) carries over unchanged.
       valuation display, and the refresh button ("Search comps") all exist;
       no dedicated card-detail screen (showing the full sale-by-sale
       backing list) yet.
-- [~] **M4** — Image upload + card identification with the
-      confirm-before-save form. Built ahead of M3 by request — see "Adding
-      a card from photos" above.
+- [x] **M4** — Image upload + card identification with the
+      confirm-before-save form. Built ahead of M3 by request, then rebuilt
+      as the 4-pass OCR + catalog-lookup scanner (slab check, back read,
+      catalog resolution, closed-list parallel read) — see "Adding a card
+      from photos" above.
 - [ ] **M5** — Scheduled weekly refresh job with per-run cost logging.
 
 ## Test fixture

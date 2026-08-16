@@ -12,11 +12,13 @@
  * --cardNumber --parallel --serialNumbering --sport are optional (default
  * to "" / "Unknown"). --isAuto / --isRelic are boolean presence flags.
  */
-import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { AgentSource } from '@/lib/sources/AgentSource';
 import { computeValuation } from '@/lib/valuation/computeValuation';
+import { computeAndPersistValuation } from '@/lib/valuation/computeAndPersistValuation';
 import { toScoringSale } from '@/lib/valuation/fromPrisma';
+import { persistSales } from '@/lib/valuation/persistSales';
+import { formatMoney } from '@/lib/format';
 import type { RawSale } from '@/lib/sources/types';
 
 interface CliArgs {
@@ -93,14 +95,6 @@ function parseCliArgs(argv: string[]): CliArgs {
   };
 }
 
-function isUniqueConstraintViolation(err: unknown): boolean {
-  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
-}
-
-function formatMoney(value: number | null): string {
-  return value === null ? '—' : `$${value.toFixed(2)}`;
-}
-
 async function main(): Promise<void> {
   const args = parseCliArgs(process.argv.slice(2));
 
@@ -153,38 +147,20 @@ async function main(): Promise<void> {
     console.log(`    ${sale.url}${sale.notes ? `  (${sale.notes})` : ''}`);
   }
 
-  let inserted = 0;
-  let duplicates = 0;
-  for (const sale of rawSales) {
-    try {
-      await prisma.sale.create({
-        data: {
-          cardId: card.id,
-          grade: sale.grade,
-          price: sale.price,
-          saleDate: new Date(sale.date),
-          marketplace: sale.marketplace,
-          listingTitle: sale.title,
-          sourceUrl: sale.url,
-          sourceType: 'agent',
-          notes: sale.notes,
-        },
-      });
-      inserted++;
-    } catch (err: unknown) {
-      if (isUniqueConstraintViolation(err)) {
-        duplicates++;
-      } else {
-        console.error(`\nFailed to store sale (${sale.url}):`, err);
-      }
-    }
-  }
+  const { inserted, duplicates } = await persistSales(card.id, rawSales);
   console.log(`\nStored ${inserted} new sale(s); ${duplicates} already on record (deduped by sourceUrl).`);
 
   // Score against every Sale on record for this card, not just this run's
-  // batch — that's the whole point of the append-only Sale table.
-  const allSales = await prisma.sale.findMany({ where: { cardId: card.id } });
-  const valuation = computeValuation(allSales.map(toScoringSale), args.grade);
+  // batch — that's the whole point of the append-only Sale table. If an
+  // owned copy exists matching this card + grade, persist the result as a
+  // Valuation snapshot too (same as the in-app "Search comps" button);
+  // otherwise there's nothing to attach a Valuation to, so just compute
+  // and print.
+  const matchingCopy = await prisma.copyOwned.findFirst({ where: { cardId: card.id, grade: args.grade } });
+
+  const valuation = matchingCopy
+    ? await computeAndPersistValuation(matchingCopy.id, card.id, args.grade)
+    : computeValuation((await prisma.sale.findMany({ where: { cardId: card.id } })).map(toScoringSale), args.grade);
 
   console.log('\n--- Computed valuation ---');
   if (!valuation.sufficient) {
@@ -193,7 +169,12 @@ async function main(): Promise<void> {
     console.log(`Value: ${formatMoney(valuation.value)}  (range ${formatMoney(valuation.low)} – ${formatMoney(valuation.high)})`);
     console.log(`Based on ${valuation.sampleSize} sale(s) within the 180-day window; ${valuation.saleIdsUsed.length} used after outlier trimming.`);
   }
-  console.log(`Method: ${valuation.method}\n`);
+  console.log(`Method: ${valuation.method}`);
+  console.log(
+    matchingCopy
+      ? `Saved as a Valuation snapshot on the owned copy (${matchingCopy.id}).\n`
+      : `Not saved — no owned copy matches this card + grade (add it via the app, or match --grade to one you own).\n`,
+  );
 
   await prisma.$disconnect();
 }

@@ -111,19 +111,51 @@ npm run comp -- --player "Brayden Burries" --year 2025 --grade RAW \
 
 This finds-or-creates the `Card` row, retrieves sales, stores any new ones
 (deduped by `sourceUrl`), then runs `computeValuation` against every `Sale`
-on record for that card + grade — not just what this run retrieved — and
-prints both. Requires `ANTHROPIC_API_KEY` in `.env.local`. The Burries
-fixture is a thin market: `sufficient: false` is the correct result.
+on record for that card + grade — not just what this run retrieved. If an
+owned copy matches this card + grade, the result is also persisted as a
+`Valuation` snapshot (same as the in-app button below); otherwise it's
+computed and printed only. Requires `ANTHROPIC_API_KEY` in `.env.local`.
+The Burries fixture is a thin market: `sufficient: false` is the correct
+result.
+
+`lib/valuation/persistSales.ts` (dedupe-on-insert) and
+`lib/valuation/computeAndPersistValuation.ts` (score + write a `Valuation`
++ its `ValuationSaleUsed` rows) are shared between this CLI and the
+in-app button, so both paths leave identical records.
+
+## Searching for comps in the app
+
+Each `CopyOwned` row on `/` has a **Search comps** button —
+`POST /api/copies/[id]/refresh` — instead of needing the CLI.
+
+**This is intentionally a fast, partial search, not an exhaustive one.**
+The CLI's thorough default (up to 8 rounds of web search) took ~13–15
+minutes end to end in testing — far longer than a serverless request can
+run (this route sets `maxDuration = 60`). The button uses a much smaller
+search budget (`AgentSource`'s `maxSearches` constructor option) so it
+reliably finishes in well under a minute. Because `Sale` rows are
+append-only and deduped by `sourceUrl`, nothing is lost between clicks:
+searching again later adds to what's already on record rather than
+starting over, and the valuation gets more accurate as more sales
+accumulate. A single click on a thin-market card may correctly report
+`sufficient: false` — that's not a bug, click again later or after the CLI
+has run a deeper search.
 
 ## Adding a card from photos
 
 `/add` lets you skip typing entirely: take (or upload) a photo of the card
-front, optionally the back, and Claude vision (`claude-sonnet-5`) fills in
-year/brand/set/player/card number/parallel/grade/etc. Exactly like
-`AgentSource`, this is defensive — a bad photo, low confidence, or a parse
-failure never blocks you; you just get an empty/partially-filled form to
-correct by hand. **Nothing is written to the database until you hit "Save
-to collection"** — a scan only ever returns JSON to the page.
+front, optionally the back, and Claude vision (`claude-sonnet-5`, high
+effort) fills in year/brand/set/player/card number/parallel/grade/etc.
+The prompt runs a literal-transcription pass before mapping fields — read
+every visible character first, then fill the schema from that — rather
+than pattern-matching from what a similar card "usually" has; it also
+distinguishes a real ink/sticker autograph from a printed facsimile
+signature, and prefers the back for card number/year when both photos are
+given. It's still a vision model reading a photo, not a database lookup —
+low confidence + null fields is the honest fallback when a photo is
+blurry, cropped, or the back wasn't included, exactly like `AgentSource`
+never fabricates a sale. **Nothing is written to the database until you
+hit "Save to collection"** — a scan only ever returns JSON to the page.
 
 - `POST /api/scan` — front (required) + back (optional) photo → structured
   attributes. Saves the photos (Vercel Blob in production, `public/uploads/`
@@ -181,8 +213,10 @@ built so far (API routes, DB, auth-free design) carries over unchanged.
       full unit test coverage. No UI, no API calls.
 - [x] **M2** — `AgentSource` (Claude + web search) and a CLI script to
       print retrieved sales and the computed valuation.
-- [~] **M3** — Collection + card detail UI, manual entry. Collection list
-      exists; no card-detail screen or "refresh value" button yet.
+- [~] **M3** — Collection + card detail UI, manual entry, a "refresh
+      value" button per card. Collection list, valuation display, and the
+      refresh button ("Search comps") all exist; no dedicated card-detail
+      screen (showing the full sale-by-sale backing list) yet.
 - [~] **M4** — Image upload + card identification with the
       confirm-before-save form. Built ahead of M3 by request — see "Adding
       a card from photos" above.

@@ -164,16 +164,30 @@ export function extractSalesFromResponseText(raw: string): RawSale[] {
   return withUrl;
 }
 
+/**
+ * Thorough default (used by the CLI, which has no time limit): lets the
+ * model run up to 8 rounds of web search. Observed real-world latency at
+ * this setting: ~13-15 minutes on a thin-market card — far beyond what a
+ * serverless request can wait for. The in-app "Search comps" button
+ * passes a much smaller number (see app/api/copies/[id]/refresh) to stay
+ * inside that budget; each click still adds whatever it finds to the
+ * append-only Sale table, so search depth accumulates across clicks
+ * instead of needing to happen in one shot.
+ */
+const DEFAULT_MAX_SEARCHES = 8;
+
 export class AgentSource implements PriceSource {
   readonly name = 'agent';
 
   private readonly client: Anthropic;
+  private readonly maxSearches: number;
 
-  constructor(client?: Anthropic) {
+  constructor(client?: Anthropic, maxSearches: number = DEFAULT_MAX_SEARCHES) {
     // Anthropic() reads ANTHROPIC_API_KEY from the environment by default —
     // never hardcode it. Constructor param exists for tests to inject a
     // mock client.
     this.client = client ?? new Anthropic();
+    this.maxSearches = maxSearches;
   }
 
   async fetchSales(card: Card, grade: string): Promise<RawSale[]> {
@@ -184,7 +198,7 @@ export class AgentSource implements PriceSource {
         max_tokens: 8000,
         system: SYSTEM_PROMPT,
         output_config: { effort: 'medium' },
-        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 8 }],
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: this.maxSearches }],
         messages: [{ role: 'user', content: buildUserMessage(card, grade) }],
       });
     } catch (err: unknown) {

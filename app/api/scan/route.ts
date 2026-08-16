@@ -10,6 +10,10 @@ import { fileToBase64, isSupportedImageMediaType, saveUploadedImage } from '@/li
  * identification succeeds, so a failed scan still lets the user save the
  * photos alongside a manually-filled-in form.
  */
+// Safety margin for the vision call's higher effort/token budget — well
+// under any plan's function-timeout ceiling in practice.
+export const maxDuration = 60;
+
 export async function POST(request: Request): Promise<NextResponse> {
   const formData = await request.formData();
   const frontFile = formData.get('front');

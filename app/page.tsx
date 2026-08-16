@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/db';
+import { RefreshValueButton } from '@/components/RefreshValueButton';
+import { formatMoney, formatRelativeTime } from '@/lib/format';
 
 // This page reads the collection straight from the DB on every request.
 // Without this, Next.js statically prerenders it at build time and bakes
@@ -29,9 +31,49 @@ function describeCard(card: {
   return parts.join(' ');
 }
 
+interface ValuationSnapshot {
+  value: number | null;
+  low: number | null;
+  high: number | null;
+  sampleSize: number;
+  sufficient: boolean;
+  computedAt: Date;
+}
+
+function ValuationSummary({ valuation }: { valuation: ValuationSnapshot | undefined }) {
+  if (!valuation) {
+    return <p className="text-xs text-muted-foreground">Not yet valued</p>;
+  }
+
+  if (!valuation.sufficient) {
+    return (
+      <div className="text-right">
+        <p className="text-xs text-muted-foreground">Insufficient comps (n={valuation.sampleSize})</p>
+        <p className="text-[11px] text-muted-foreground">as of {formatRelativeTime(valuation.computedAt)}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-right">
+      <p className="text-sm font-medium">{formatMoney(valuation.value)}</p>
+      <p className="text-xs text-muted-foreground">
+        {formatMoney(valuation.low)}–{formatMoney(valuation.high)} · n={valuation.sampleSize}
+      </p>
+      <p className="text-[11px] text-muted-foreground">as of {formatRelativeTime(valuation.computedAt)}</p>
+    </div>
+  );
+}
+
 export default async function CollectionPage() {
   const copies = await prisma.copyOwned.findMany({
-    include: { card: true },
+    include: {
+      card: true,
+      // Only the latest snapshot — Valuation history exists in the DB
+      // (never mutated, see prisma/schema.prisma) but the collection view
+      // shows current status only.
+      valuations: { orderBy: { computedAt: 'desc' }, take: 1 },
+    },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -89,10 +131,9 @@ export default async function CollectionPage() {
                   {copy.purchasePrice != null ? ` · bought $${copy.purchasePrice.toFixed(2)}` : ''}
                 </p>
               </div>
-              <div className="flex-shrink-0 text-right text-xs text-muted-foreground">
-                Not yet valued
-                <br />
-                <span className="text-[11px]">run `npm run comp`</span>
+              <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
+                <ValuationSummary valuation={copy.valuations[0]} />
+                <RefreshValueButton copyOwnedId={copy.id} />
               </div>
             </li>
           ))}

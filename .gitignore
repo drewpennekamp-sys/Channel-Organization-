@@ -11,3 +11,8 @@ build
 npm-debug.log*
 next-env.d.ts
 *.tsbuildinfo
+
+# Card Comp Tracker
+prisma/dev.db*
+logs/*.jsonl
+public/uploads/

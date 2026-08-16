@@ -28,6 +28,29 @@ gets you the same full-screen, app-like experience without an Apple
 Developer account or App Store review. See "Deploy" for the native-app
 path if you want one later.
 
+## UI
+
+Four views, reachable from the left nav (a bottom tab bar on mobile):
+
+- **Dashboard** (`/`) — total value, cards owned, gain on valued cards, how
+  many need a comp search; a real recent-activity feed (cards added,
+  valuations computed — derived straight from existing timestamps, nothing
+  logged separately) and a "needs attention" shortlist.
+- **Collection** (`/collection`) — every card as a photo tile, filterable by
+  sport/graded/raw/needs-search and searchable by name.
+- **Value** (`/value`) — total collection value, split honestly into what's
+  actually valued from comps vs. what's still shown at purchase price; a
+  holdings table with gain/loss per card. No fabricated trend line — the
+  app doesn't track a historical portfolio series, so it doesn't pretend to.
+- **Comps** (`/comps`) — per-card "Search comps," plus "Search my whole
+  collection," which runs the same bounded search sequentially across every
+  card with a live feed and progress bar (real requests, not simulated —
+  each card still gets its own ~60s-budgeted search).
+
+Design tokens (light/dark) and fonts (Oswald/Karla/JetBrains Mono, self-hosted
+under `public/fonts/`) live in `app/globals.css`; `/add` (photo scan) keeps
+its own plain form styling for now.
+
 ## Local development
 
 ```bash
@@ -214,9 +237,10 @@ built so far (API routes, DB, auth-free design) carries over unchanged.
 - [x] **M2** — `AgentSource` (Claude + web search) and a CLI script to
       print retrieved sales and the computed valuation.
 - [~] **M3** — Collection + card detail UI, manual entry, a "refresh
-      value" button per card. Collection list, valuation display, and the
-      refresh button ("Search comps") all exist; no dedicated card-detail
-      screen (showing the full sale-by-sale backing list) yet.
+      value" button per card. Dashboard/Collection/Value/Comps views,
+      valuation display, and the refresh button ("Search comps") all exist;
+      no dedicated card-detail screen (showing the full sale-by-sale
+      backing list) yet.
 - [~] **M4** — Image upload + card identification with the
       confirm-before-save form. Built ahead of M3 by request — see "Adding
       a card from photos" above.

@@ -1,144 +1,172 @@
 import Link from 'next/link';
-import { prisma } from '@/lib/db';
-import { RefreshValueButton } from '@/components/RefreshValueButton';
+import {
+  getPortfolio,
+  computePortfolioStats,
+  buildActivityFeed,
+  needsSearch,
+  cardEmoji,
+  cardTitle,
+} from '@/lib/portfolio';
 import { formatMoney, formatRelativeTime } from '@/lib/format';
+import { CardThumb } from '@/components/CardThumb';
 
-// This page reads the collection straight from the DB on every request.
-// Without this, Next.js statically prerenders it at build time and bakes
-// in whatever was in the database then — the collection would never
-// update after a fresh `npm run build`.
+// Reads straight from the DB on every request — without this, Next.js
+// statically prerenders it at build time and bakes in whatever was in the
+// database then.
 export const dynamic = 'force-dynamic';
 
-function describeCard(card: {
-  year: number;
-  brand: string;
-  set: string;
-  subset: string;
-  player: string;
-  cardNumber: string;
-  parallel: string;
-  serialNumbering: string;
-  isAuto: boolean;
-  isRelic: boolean;
-}): string {
-  const parts = [`${card.year} ${card.brand} ${card.set}`.trim()];
-  if (card.subset) parts.push(card.subset);
-  parts.push(`— ${card.player}${card.cardNumber ? ` #${card.cardNumber}` : ''}`);
-  const tags = [card.parallel, card.serialNumbering, card.isAuto ? 'AUTO' : '', card.isRelic ? 'RELIC' : '']
-    .filter(Boolean)
-    .join(' ');
-  if (tags) parts.push(tags);
-  return parts.join(' ');
+function activityLine(event: ReturnType<typeof buildActivityFeed>[number]): { text: string; dot: string } {
+  const title = cardTitle(event.copy.card);
+  if (event.kind === 'added') {
+    return { text: `<strong>Added to collection</strong> — ${title}`, dot: 'var(--accent)' };
+  }
+  if (event.kind === 'valued') {
+    return {
+      text: `<strong>Comps updated</strong> — ${title} (n=${event.copy.latestValuation!.sampleSize})`,
+      dot: 'var(--success)',
+    };
+  }
+  return {
+    text: `<strong>Insufficient comps</strong> (n=${event.copy.latestValuation!.sampleSize}) — ${title}`,
+    dot: 'var(--warning)',
+  };
 }
 
-interface ValuationSnapshot {
-  value: number | null;
-  low: number | null;
-  high: number | null;
-  sampleSize: number;
-  sufficient: boolean;
-  computedAt: Date;
-}
-
-function ValuationSummary({ valuation }: { valuation: ValuationSnapshot | undefined }) {
-  if (!valuation) {
-    return <p className="text-xs text-muted-foreground">Not yet valued</p>;
-  }
-
-  if (!valuation.sufficient) {
-    return (
-      <div className="text-right">
-        <p className="text-xs text-muted-foreground">Insufficient comps (n={valuation.sampleSize})</p>
-        <p className="text-[11px] text-muted-foreground">as of {formatRelativeTime(valuation.computedAt)}</p>
-      </div>
-    );
-  }
+export default async function DashboardPage() {
+  const copies = await getPortfolio();
+  const stats = computePortfolioStats(copies);
+  const activity = buildActivityFeed(copies, 6);
+  const attention = copies.filter(needsSearch).slice(0, 4);
 
   return (
-    <div className="text-right">
-      <p className="text-sm font-medium">{formatMoney(valuation.value)}</p>
-      <p className="text-xs text-muted-foreground">
-        {formatMoney(valuation.low)}–{formatMoney(valuation.high)} · n={valuation.sampleSize}
-      </p>
-      <p className="text-[11px] text-muted-foreground">as of {formatRelativeTime(valuation.computedAt)}</p>
-    </div>
-  );
-}
-
-export default async function CollectionPage() {
-  const copies = await prisma.copyOwned.findMany({
-    include: {
-      card: true,
-      // Only the latest snapshot — Valuation history exists in the DB
-      // (never mutated, see prisma/schema.prisma) but the collection view
-      // shows current status only.
-      valuations: { orderBy: { computedAt: 'desc' }, take: 1 },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  const totalPurchase = copies.reduce((sum, c) => sum + (c.purchasePrice ?? 0), 0);
-
-  return (
-    <main className="container max-w-3xl py-8">
-      <div className="mb-6 flex items-center justify-between">
+    <section className="page">
+      <div className="page-head">
         <div>
-          <h1 className="text-2xl font-semibold">Collection</h1>
-          <p className="text-sm text-muted-foreground">
-            {copies.length} card{copies.length === 1 ? '' : 's'}
-            {totalPurchase > 0 ? ` · $${totalPurchase.toFixed(2)} total purchase price` : ''}
-          </p>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-desc">Your collection at a glance — value, recent activity, and what needs a comp search.</p>
         </div>
-        <Link
-          href="/add"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-        >
+        <Link href="/add" className="btn btn-primary">
           + Add card
         </Link>
       </div>
 
       {copies.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border p-10 text-center text-muted-foreground">
-          <p className="mb-3">No cards yet.</p>
-          <Link href="/add" className="text-sm font-medium text-primary underline">
-            Add your first card
-          </Link>
+        <div className="panel">
+          <div className="panel-body">
+            <div className="empty-note">
+              No cards yet.{' '}
+              <Link href="/add" style={{ color: 'var(--accent)', fontWeight: 700 }}>
+                Add your first card
+              </Link>
+              .
+            </div>
+          </div>
         </div>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {copies.map((copy) => (
-            <li
-              key={copy.id}
-              className="flex items-center gap-4 rounded-lg border border-border bg-card p-3"
-            >
-              {copy.frontImagePath ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={copy.frontImagePath}
-                  alt={describeCard(copy.card)}
-                  className="h-16 w-16 flex-shrink-0 rounded-md object-cover"
-                />
+        <>
+          <div className="stat-row">
+            <div className="stat-tile">
+              <div className="eyebrow">Total value</div>
+              <div className="stat-value num">{formatMoney(stats.totalValue)}</div>
+              <div className="refractor-underline" />
+            </div>
+            <div className="stat-tile">
+              <div className="eyebrow">Cards owned</div>
+              <div className="stat-value num">{stats.cardCount}</div>
+              <div className="stat-sub">
+                across {stats.setCount} set{stats.setCount === 1 ? '' : 's'}
+              </div>
+            </div>
+            <div className="stat-tile">
+              <div className="eyebrow">Gain on valued cards</div>
+              {stats.gainOnValued === null ? (
+                <>
+                  <div className="stat-value num" style={{ color: 'var(--text-faint)' }}>
+                    —
+                  </div>
+                  <div className="stat-sub">no priced cards with a purchase price yet</div>
+                </>
               ) : (
-                <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-md bg-secondary text-2xl">
-                  🃏
-                </div>
+                <>
+                  <div
+                    className="stat-value num"
+                    style={{ color: stats.gainOnValued >= 0 ? 'var(--success)' : 'var(--danger)' }}
+                  >
+                    {stats.gainOnValued >= 0 ? '+' : ''}
+                    {formatMoney(stats.gainOnValued)}
+                  </div>
+                  <div className="stat-sub">
+                    <span className={`chip ${stats.gainOnValued >= 0 ? 'chip-up' : 'chip-down'}`}>
+                      {stats.gainOnValued >= 0 ? '▲' : '▼'} {Math.abs(stats.gainPctOnValued ?? 0).toFixed(1)}%
+                    </span>{' '}
+                    vs cost
+                  </div>
+                </>
               )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{describeCard(copy.card)}</p>
-                <p className="text-xs text-muted-foreground">
-                  {copy.grade}
-                  {copy.certNumber ? ` · cert ${copy.certNumber}` : ''}
-                  {copy.purchasePrice != null ? ` · bought $${copy.purchasePrice.toFixed(2)}` : ''}
-                </p>
+            </div>
+            <div className="stat-tile">
+              <div className="eyebrow">Needs a search</div>
+              <div className="stat-value num">{stats.needsSearchCount}</div>
+              <div className="stat-sub">insufficient or unsearched</div>
+            </div>
+          </div>
+
+          <div className="grid-2">
+            <div className="panel">
+              <div className="panel-head">
+                <h3>Recent activity</h3>
               </div>
-              <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
-                <ValuationSummary valuation={copy.valuations[0]} />
-                <RefreshValueButton copyOwnedId={copy.id} />
+              <div className="panel-body">
+                {activity.length === 0 ? (
+                  <div className="empty-note">Nothing yet — add a card or run a comp search.</div>
+                ) : (
+                  activity.map((event) => {
+                    const line = activityLine(event);
+                    return (
+                      <div className="feed-row" key={event.id}>
+                        <span className="feed-dot" style={{ background: line.dot }} />
+                        <span className="feed-text" dangerouslySetInnerHTML={{ __html: line.text }} />
+                        <span className="feed-time">{formatRelativeTime(event.at)}</span>
+                      </div>
+                    );
+                  })
+                )}
               </div>
-            </li>
-          ))}
-        </ul>
+            </div>
+
+            <div className="panel">
+              <div className="panel-head">
+                <h3>Needs attention</h3>
+              </div>
+              <div className="panel-body">
+                {attention.length === 0 ? (
+                  <div className="empty-note">Every card has a comp search on record.</div>
+                ) : (
+                  attention.map((copy) => (
+                    <div className="attn-row" key={copy.id}>
+                      <div className="attn-thumb">
+                        <CardThumb src={copy.frontImagePath} alt="" emoji={cardEmoji(copy.card)} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="attn-name">{cardTitle(copy.card)}</div>
+                        <div className="attn-meta">
+                          {copy.grade} ·{' '}
+                          {copy.latestValuation
+                            ? `insufficient (n=${copy.latestValuation.sampleSize})`
+                            : 'not yet valued'}
+                        </div>
+                      </div>
+                      <Link href="/comps" className="btn btn-sm">
+                        Search
+                      </Link>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </>
       )}
-    </main>
+    </section>
   );
 }

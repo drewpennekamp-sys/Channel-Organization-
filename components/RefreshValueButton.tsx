@@ -11,7 +11,14 @@ import { useState } from 'react';
  * shot: Sale rows are append-only and deduped, so searching again later
  * only adds to what's already on record.
  */
-export function RefreshValueButton({ copyOwnedId }: { copyOwnedId: string }) {
+export function RefreshValueButton({
+  copyOwnedId,
+  onDone,
+}: {
+  copyOwnedId: string;
+  /** Called after a successful search with the sample size found, for callers (e.g. the Comps page) that want to report results without a full page refresh. */
+  onDone?: (sampleSize: number) => void;
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,11 +28,12 @@ export function RefreshValueButton({ copyOwnedId }: { copyOwnedId: string }) {
     setError(null);
     try {
       const res = await fetch(`/api/copies/${copyOwnedId}/refresh`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}) as { error?: string; valuation?: { sampleSize: number } });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}) as { error?: string });
-        setError(data.error ?? 'Search failed — try again.');
+        setError((data as { error?: string }).error ?? 'Search failed — try again.');
         return;
       }
+      onDone?.((data as { valuation?: { sampleSize: number } }).valuation?.sampleSize ?? 0);
       router.refresh();
     } catch (err: unknown) {
       console.error('Search comps request failed:', err);
@@ -36,16 +44,13 @@ export function RefreshValueButton({ copyOwnedId }: { copyOwnedId: string }) {
   }
 
   return (
-    <div className="flex flex-col items-end gap-1">
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={loading}
-        className="whitespace-nowrap rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium hover:bg-secondary disabled:opacity-50"
-      >
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+      <button type="button" onClick={handleClick} disabled={loading} className="btn btn-sm">
         {loading ? 'Searching…' : 'Search comps'}
       </button>
-      {error && <span className="max-w-[10rem] text-right text-[11px] text-destructive">{error}</span>}
+      {error && (
+        <span style={{ maxWidth: '11rem', textAlign: 'right', fontSize: 11, color: 'var(--danger)' }}>{error}</span>
+      )}
     </div>
   );
 }

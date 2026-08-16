@@ -33,6 +33,27 @@ describe('extractSalesFromResponseText', () => {
     expect(sales).toEqual([]);
   });
 
+  it('handles a real observed response: preamble prose before the fenced JSON', () => {
+    // Captured verbatim from a live run against the Brayden Burries fixture
+    // — Claude explained itself before the fence despite being told not
+    // to. This regressed the original anchored-fence implementation.
+    const raw = [
+      "Based on my searches, I was unable to find any confirmed sold listings for this specific card.",
+      '',
+      '```json',
+      '{',
+      '  "sales": [],',
+      '  "sufficient": false,',
+      '  "notes": "No confirmed sold listings were found for the 2025 Topps Chrome McDonald\'s All American Brayden Burries autograph (card #EA-BB) in raw/ungraded condition."',
+      '}',
+      '```',
+    ].join('\n');
+
+    const sales = extractSalesFromResponseText(raw);
+
+    expect(sales).toEqual([]);
+  });
+
   it('strips bare ``` fences (no "json" hint)', () => {
     const payload = { sales: [], sufficient: false };
     const raw = '```\n' + JSON.stringify(payload) + '\n```';

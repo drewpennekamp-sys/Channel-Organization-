@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { Card } from '@prisma/client';
 import { z } from 'zod';
 import { logApiUsage } from '@/lib/logging/costLog';
+import { extractJsonPayload } from '@/lib/parsing/extractJson';
 import type { PriceSource, RawSale } from './types';
 
 /**
@@ -102,20 +103,15 @@ function buildUserMessage(card: Card, grade: string): string {
   ].join('\n');
 }
 
-/** Strips ``` / ```json fences if the model wrapped its JSON in them. */
-function stripCodeFences(raw: string): string {
-  const trimmed = raw.trim();
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  return fenced ? fenced[1].trim() : trimmed;
-}
-
 /**
- * Defensive parse of the model's raw text output: strip fences, JSON.parse,
- * validate shape. Logs and returns null on any failure rather than
- * throwing — the caller treats null the same as "no sales found".
+ * Defensive parse of the model's raw text output: extract the JSON payload
+ * (handling a fence, and a preamble/postamble around it — see
+ * extractJsonPayload), JSON.parse, validate shape. Logs and returns null on
+ * any failure rather than throwing — the caller treats null the same as
+ * "no sales found".
  */
 function parseAgentResponse(raw: string): AgentResponse | null {
-  const stripped = stripCodeFences(raw);
+  const stripped = extractJsonPayload(raw);
 
   let json: unknown;
   try {

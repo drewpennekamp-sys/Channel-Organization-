@@ -101,16 +101,38 @@ on record for that card + grade — not just what this run retrieved — and
 prints both. Requires `ANTHROPIC_API_KEY` in `.env.local`. The Burries
 fixture is a thin market: `sufficient: false` is the correct result.
 
+## Adding a card from photos
+
+`/add` lets you skip typing entirely: take (or upload) a photo of the card
+front, optionally the back, and Claude vision (`claude-sonnet-5`) fills in
+year/brand/set/player/card number/parallel/grade/etc. Exactly like
+`AgentSource`, this is defensive — a bad photo, low confidence, or a parse
+failure never blocks you; you just get an empty/partially-filled form to
+correct by hand. **Nothing is written to the database until you hit "Save
+to collection"** — a scan only ever returns JSON to the page.
+
+- `POST /api/scan` — front (required) + back (optional) photo → structured
+  attributes. Saves the photos to `public/uploads/` (gitignored) either
+  way, so a failed scan doesn't lose them.
+- `POST /api/cards` — the confirmed/edited form → creates (or reuses, via
+  the `Card` identity constraint) the `Card` row and a `CopyOwned` row.
+- `/` (Collection) lists everything saved so far.
+
+On a phone, `<input type="file" capture="environment">` opens the camera
+directly — this works today in mobile Safari with no App Store step at
+all. "Add to Home Screen" gives it a full-screen, app-like icon.
+
 ## Build milestones
 
 - [x] **M1** — Schema, migrations, seed script, comp scoring function with
       full unit test coverage. No UI, no API calls.
 - [x] **M2** — `AgentSource` (Claude + web search) and a CLI script to
       print retrieved sales and the computed valuation.
-- [ ] **M3** — Collection + card detail UI, manual entry, a "refresh
-      value" button per card.
-- [ ] **M4** — Image upload and card identification with a
-      confirm-before-save form.
+- [~] **M3** — Collection + card detail UI, manual entry. Collection list
+      exists; no card-detail screen or "refresh value" button yet.
+- [~] **M4** — Image upload + card identification with the
+      confirm-before-save form. Built ahead of M3 by request — see "Adding
+      a card from photos" above.
 - [ ] **M5** — Scheduled weekly refresh job with per-run cost logging.
 
 ## Test fixture

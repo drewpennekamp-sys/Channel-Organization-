@@ -70,11 +70,42 @@ every known `Sale` for a card, it:
 It never averages, and never falls back to a mean when the median is
 inconvenient.
 
+## Comp retrieval
+
+`lib/sources/AgentSource.ts` retrieves sold comps via the Claude API's
+`web_search` tool (`claude-sonnet-5`) — it never scrapes a marketplace
+directly. It's defensive by design: strips markdown fences if the model adds
+them, `JSON.parse`s inside a `try/catch`, validates the shape with zod, and
+drops (logging as it goes) any sale missing a `sourceUrl` rather than
+throwing. On any failure — a bad response, a refusal, an API error — it
+returns `[]` and logs what happened; it never fabricates a sale.
+
+`lib/sources/ApiSource.ts` is a stub for a future paid card-data API —
+`fetchSales` throws `NotImplementedError`.
+
+Every API call's token usage is appended to `logs/usage.jsonl` (gitignored)
+via `lib/logging/costLog.ts`, so cost is visible locally without the
+Anthropic console.
+
+Try it:
+
+```bash
+npm run comp -- --player "Brayden Burries" --year 2025 --grade RAW \
+  --brand Topps --set "Chrome McDonald's All American" \
+  --cardNumber EA-BB --isAuto --sport Basketball
+```
+
+This finds-or-creates the `Card` row, retrieves sales, stores any new ones
+(deduped by `sourceUrl`), then runs `computeValuation` against every `Sale`
+on record for that card + grade — not just what this run retrieved — and
+prints both. Requires `ANTHROPIC_API_KEY` in `.env.local`. The Burries
+fixture is a thin market: `sufficient: false` is the correct result.
+
 ## Build milestones
 
 - [x] **M1** — Schema, migrations, seed script, comp scoring function with
       full unit test coverage. No UI, no API calls.
-- [ ] **M2** — `AgentSource` (Claude + web search) and a CLI script to
+- [x] **M2** — `AgentSource` (Claude + web search) and a CLI script to
       print retrieved sales and the computed valuation.
 - [ ] **M3** — Collection + card detail UI, manual entry, a "refresh
       value" button per card.

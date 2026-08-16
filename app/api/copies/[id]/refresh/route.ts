@@ -24,32 +24,44 @@ export async function POST(
   _request: Request,
   { params }: { params: { id: string } },
 ): Promise<NextResponse> {
-  const copy = await prisma.copyOwned.findUnique({
-    where: { id: params.id },
-    include: { card: true },
-  });
+  try {
+    const copy = await prisma.copyOwned.findUnique({
+      where: { id: params.id },
+      include: { card: true },
+    });
 
-  if (!copy) {
-    return NextResponse.json({ error: 'Card not found.' }, { status: 404 });
+    if (!copy) {
+      return NextResponse.json({ error: 'Card not found.' }, { status: 404 });
+    }
+
+    const source = new AgentSource(undefined, INTERACTIVE_MAX_SEARCHES);
+    const rawSales = await source.fetchSales(copy.card, copy.grade);
+
+    const { inserted, duplicates } = await persistSales(copy.cardId, rawSales);
+
+    const valuation = await computeAndPersistValuation(copy.id, copy.cardId, copy.grade);
+
+    return NextResponse.json({
+      inserted,
+      duplicates,
+      valuation: {
+        value: valuation.value,
+        low: valuation.low,
+        high: valuation.high,
+        sampleSize: valuation.sampleSize,
+        sufficient: valuation.sufficient,
+        method: valuation.method,
+      },
+    });
+  } catch (err: unknown) {
+    // Without this, any failure here (a DB write error, an unexpected
+    // exception) fell through to Next.js's default 500 HTML page, which
+    // the client's res.json() can't parse — surfacing only the generic
+    // "Search failed" with no way to diagnose it remotely. Same fix as
+    // the upload path: log server-side, relay the real reason to the
+    // client (no multi-tenant data here to protect).
+    console.error('[api/copies/refresh] Failed:', err);
+    const message = err instanceof Error ? err.message : 'Search failed.';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const source = new AgentSource(undefined, INTERACTIVE_MAX_SEARCHES);
-  const rawSales = await source.fetchSales(copy.card, copy.grade);
-
-  const { inserted, duplicates } = await persistSales(copy.cardId, rawSales);
-
-  const valuation = await computeAndPersistValuation(copy.id, copy.cardId, copy.grade);
-
-  return NextResponse.json({
-    inserted,
-    duplicates,
-    valuation: {
-      value: valuation.value,
-      low: valuation.low,
-      high: valuation.high,
-      sampleSize: valuation.sampleSize,
-      sufficient: valuation.sufficient,
-      method: valuation.method,
-    },
-  });
 }

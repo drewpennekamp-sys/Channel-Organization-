@@ -1,8 +1,10 @@
 # Card Comp Tracker
 
-A personal sports card collection tracker. Stores the cards I own and shows
-a current estimated value for each one, derived from real sold listings.
-Single-user, self-hosted, runs locally first.
+A personal sports card collection tracker. Stores the cards you own and
+shows a current estimated value for each one, derived from real sold
+listings. Started as a single-user local app; now deployed for a small
+private beta (you + one other person) as an installable web app — see
+"Deploy" below.
 
 **Core principle: the LLM retrieves individual sales; deterministic code
 computes the value.** Nothing ever asks a model "what is this card worth."
@@ -11,25 +13,35 @@ scores them, so the same inputs always produce the same output.
 
 ## Stack
 
-- Next.js (App Router) + TypeScript, Tailwind, shadcn/ui
-- SQLite via Prisma for local dev — schema is kept Postgres-compatible
-  (no SQLite-only types, no native enums, no scalar-list columns) so a
-  move to Supabase later is a datasource swap, not a schema rewrite
-- Anthropic SDK (`@anthropic-ai/sdk`) for comp retrieval (web search) and,
-  later, card identification (vision)
+- Next.js (App Router) + TypeScript, Tailwind
+- Postgres via Prisma (Vercel Postgres/Neon in production; any reachable
+  Postgres for local dev)
+- Vercel Blob for uploaded card photos in production; local filesystem
+  (`public/uploads/`) when no Blob token is configured
+- Anthropic SDK (`@anthropic-ai/sdk`, `claude-sonnet-5`) for comp
+  retrieval (web search) and card identification from photos (vision)
 - Vitest for tests
 
-No auth, no payments, no multi-tenancy, no mobile app — single local user.
+No auth, no payments — a handful of trusted people share one deployment.
+Not a native app; installed to the home screen from Safari/Chrome, which
+gets you the same full-screen, app-like experience without an Apple
+Developer account or App Store review. See "Deploy" for the native-app
+path if you want one later.
 
 ## Local development
 
 ```bash
 npm install
-cp .env.local.example .env.local   # fill in ANTHROPIC_API_KEY when you reach M2
-npm run db:migrate                 # creates prisma/dev.db and applies migrations
+cp .env.local.example .env.local   # fill in DATABASE_URL + ANTHROPIC_API_KEY
+npm run db:migrate                 # applies migrations to DATABASE_URL
 npm run db:seed                    # adds a couple of example cards
 npm run dev
 ```
+
+`DATABASE_URL` needs a real, reachable Postgres — either your deployed
+instance (simplest: one database for local dev and production) or a local
+one. `BLOB_READ_WRITE_TOKEN` is optional locally; without it, uploaded
+photos are written to `public/uploads/` on disk instead of Vercel Blob.
 
 Run the test suite:
 
@@ -74,11 +86,13 @@ inconvenient.
 
 `lib/sources/AgentSource.ts` retrieves sold comps via the Claude API's
 `web_search` tool (`claude-sonnet-5`) — it never scrapes a marketplace
-directly. It's defensive by design: strips markdown fences if the model adds
-them, `JSON.parse`s inside a `try/catch`, validates the shape with zod, and
-drops (logging as it goes) any sale missing a `sourceUrl` rather than
-throwing. On any failure — a bad response, a refusal, an API error — it
-returns `[]` and logs what happened; it never fabricates a sale.
+directly. It's defensive by design: `lib/parsing/extractJson.ts` pulls the
+JSON payload out of the response even if the model adds markdown fences or
+a stray sentence of prose around them (a real failure mode — see git
+history), `JSON.parse`s inside a `try/catch`, validates the shape with
+zod, and drops (logging as it goes) any sale missing a `sourceUrl` rather
+than throwing. On any failure — a bad response, a refusal, an API error —
+it returns `[]` and logs what happened; it never fabricates a sale.
 
 `lib/sources/ApiSource.ts` is a stub for a future paid card-data API —
 `fetchSales` throws `NotImplementedError`.
@@ -112,15 +126,54 @@ correct by hand. **Nothing is written to the database until you hit "Save
 to collection"** — a scan only ever returns JSON to the page.
 
 - `POST /api/scan` — front (required) + back (optional) photo → structured
-  attributes. Saves the photos to `public/uploads/` (gitignored) either
-  way, so a failed scan doesn't lose them.
+  attributes. Saves the photos (Vercel Blob in production, `public/uploads/`
+  locally) either way, so a failed scan doesn't lose them.
 - `POST /api/cards` — the confirmed/edited form → creates (or reuses, via
   the `Card` identity constraint) the `Card` row and a `CopyOwned` row.
 - `/` (Collection) lists everything saved so far.
 
 On a phone, `<input type="file" capture="environment">` opens the camera
-directly — this works today in mobile Safari with no App Store step at
-all. "Add to Home Screen" gives it a full-screen, app-like icon.
+directly.
+
+## Deploy
+
+The goal is a URL you and one other person can install to your home
+screens tonight — not an App Store submission. Total cost: $0 (Vercel's
+Hobby plan, Postgres, and Blob storage are all free at this scale).
+
+1. **Push this branch, then import it on Vercel.** Go to
+   [vercel.com](https://vercel.com), sign in with GitHub, **Add New →
+   Project**, and import this repository. Vercel deploys every pushed
+   branch automatically — you don't have to merge to `main` first; the
+   branch's own URL (a "Preview" deployment) works exactly like production
+   for a two-person beta.
+2. **Add a Postgres database.** In the project → **Storage** tab →
+   **Create Database** → Postgres (Neon-backed). Connect it to this
+   project. That sets a `DATABASE_URL` env var for you. *(If the
+   integration names it something else, like `POSTGRES_PRISMA_URL`, add
+   one more env var yourself: `DATABASE_URL` = that same connection
+   string — `prisma/schema.prisma` reads `DATABASE_URL` specifically.)*
+3. **Add Blob storage.** Same **Storage** tab → **Create** → Blob →
+   connect it to this project. That sets `BLOB_READ_WRITE_TOKEN`
+   automatically — without it, uploaded photos would try to write to the
+   serverless function's read-only filesystem and fail.
+4. **Add your Anthropic key.** Project → **Settings → Environment
+   Variables** → add `ANTHROPIC_API_KEY` (all environments).
+5. **Redeploy** (Deployments tab → ⋯ → Redeploy) so the build picks up the
+   new env vars. The build runs `prisma migrate deploy` automatically —
+   the database schema is created on this first deploy, no manual step
+   needed.
+6. **Install it.** Open the deployment URL in Safari on your phone and
+   your cousin's → Share → **Add to Home Screen**. You get a full-screen
+   icon and app-like window (no browser chrome) — see `app/manifest.ts`
+   and `app/apple-icon.tsx`.
+
+**If you want a real App Store / TestFlight app later**, the cheapest path
+from here is wrapping this same deployed app in a thin native shell
+(Capacitor) rather than rewriting it — that needs an Apple Developer
+account ($99/yr) and a Mac with Xcode to build/submit, neither of which
+this environment has, so that step happens on a Mac you control. Everything
+built so far (API routes, DB, auth-free design) carries over unchanged.
 
 ## Build milestones
 

@@ -1,19 +1,20 @@
 // Card Comp Tracker — Prisma schema
 //
-// Provider is SQLite for local dev. Every field type used below (String,
-// Int, Float, Boolean, DateTime) exists identically on PostgreSQL, and
-// there are no SQLite-only features (no native enums — SQLite doesn't
-// support them, so allowed values are validated at the application layer
-// with zod — and no scalar-list columns; the Valuation/Sale link uses a
-// join table instead of a Postgres `String[]` so the schema is a drop-in
-// swap to `provider = "postgresql"` later.
+// Provider is PostgreSQL (moved off SQLite so this deploys — SQLite's file
+// doesn't survive on serverless hosts like Vercel, where each request can
+// land on a fresh filesystem). Every field type below (String, Int, Float,
+// Boolean, DateTime) is identical either way, and there are no Postgres-only
+// features in use, so the earlier "kept SQLite-compatible" design goal is
+// unaffected — this just completes that migration a bit earlier than
+// planned. Local dev points at a Postgres instance too now (see README);
+// there's one database, not a SQLite-locally/Postgres-in-prod split.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
